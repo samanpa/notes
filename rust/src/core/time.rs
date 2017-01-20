@@ -16,6 +16,14 @@ pub fn now() -> Time {
 
 #[cfg(target_os = "linux")]
 pub fn now() -> Time {
-    use core::linux;
-    return Time{ ns : linux::now() }
+    extern crate libc;
+    let mut time = libc::timespec{tv_sec: 0, tv_nsec : 0 };
+    let mut ns = 0;
+    unsafe {
+        let res = libc::clock_gettime(libc::CLOCK_REALTIME, &mut time);
+        if res == 0 {
+            ns = time.tv_sec as u64 * 1_000_000_000 + time.tv_nsec as u64;
+        }
+    }
+    return Time{ ns : ns }
 }
