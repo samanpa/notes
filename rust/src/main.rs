@@ -1,6 +1,7 @@
 extern crate notes;
 
 use notes::core::time;
+use notes::logger;
 
 fn main()
 {
@@ -12,4 +13,8 @@ fn main()
     let end = time::now();
 
     println!("{:?}", (end.ns - start.ns) / 1000_0000 );
+
+    let logfile = logger::LogFile::new("logfile"
+                                       , logger::Permission::ReadWrite);
+    
 }

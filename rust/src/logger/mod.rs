@@ -1,1 +1,3 @@
-pub mod logger;
+mod logfile;
+
+pub use self::logfile::*;
