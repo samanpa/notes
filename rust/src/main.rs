@@ -1,20 +1,17 @@
 extern crate notes;
 
 use notes::core::time;
-use notes::logger;
+use notes::logger::{LogFile,Permission};
 
 fn main()
 {
-    let start = time::now();
-    let count = 10_000_000;
-    for _ in 0..count {
-        time::now();
+    let args : Vec<String> = std::env::args().collect();
+
+    if args.len() == 1 {
+        println!("No log file given");
+        return;
     }
-    let end = time::now();
-
-    println!("{:?}", (end.ns - start.ns) / 1000_0000 );
-
-    let logfile = logger::LogFile::new("logfile"
-                                       , logger::Permission::ReadWrite);
-    
+    let logfile = LogFile::new(&args[1], Permission::ReadWrite);
+    let size = logfile.unwrap().write(time::now(), 0, "Some data.".as_bytes());
+    println!("Wrote {:x}", size.unwrap());
 }
