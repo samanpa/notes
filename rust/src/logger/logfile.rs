@@ -1,13 +1,26 @@
 use std;
 use core::time::Time;
+use super::error::*;
+use super::iter::*;
 
 #[repr(C)]
-struct FileHeader
+pub struct FileHeader
 {
     magic : u32,
     version : u8,
     msg_header_size : u8,
     file_header_size : u8,
+}
+
+impl FileHeader
+{
+    pub fn msg_header_size(&self) -> u8 {
+        self.msg_header_size
+    }
+
+    pub fn file_header_size(&self) -> u8 {
+        self.file_header_size
+    }
 }
 
 #[repr(C)]
@@ -20,33 +33,43 @@ pub struct MessageHeader
     msg_type : u16
 }
 
+impl MessageHeader
+{
+    pub fn new(time: Time, seqnum: u64, length: u32, checksum : u32,
+               msg_type: u16) -> MessageHeader {
+        MessageHeader { time : time,
+                        seqnum : seqnum,
+                        length: length,
+                        checksum : checksum,
+                        msg_type : msg_type }
+    }
+
+    pub fn time(&self) -> Time {
+        Time{ns : self.time.ns}
+    }
+    
+    pub fn seqnum(&self) -> u64 {
+        self.seqnum
+    }
+
+    pub fn length(&self) -> u32 {
+        self.length
+    }
+
+    pub fn checksum(&self) -> u32 {
+        self.checksum
+    }
+
+    pub fn msg_type(&self) -> u16 {
+       self.msg_type
+    }
+}
+
 pub struct LogFile
 {
     file : std::fs::File,
     seqnum : u64
 }
-
-#[derive(Debug)]
-pub struct LogError
-{
-    msg : std::string::String,
-}
-
-impl std::fmt::Display for LogError
-{
-    fn fmt(&self, fmt: &mut std::fmt::Formatter ) -> std::result::Result<(), std::fmt::Error>{
-        write!(fmt, "{}", self.msg)
-    }
-
-}
-impl std::error::Error for LogError
-{
-    fn description(&self) -> &str {
-        return &self.msg
-    }
-}
-
-pub type LogResult<T> = std::result::Result<T,LogError>;
 
 pub enum Permission
 {
@@ -65,23 +88,10 @@ impl Permission
 }
         
 
-const MAGIC : u32 = 0xFEEDFACE;
-const VERSION : u8 = 1;
+pub const MAGIC : u32 = 0xFEEDFACE;
+pub const VERSION : u8 = 1;
 
 use std::path::Path;
-
-
-unsafe fn to_u8<T : Sized>(source: &T) -> &[u8]
-{
-    let ptr : *const u8 = source as *const T as *const u8;
-    std::slice::from_raw_parts(ptr, std::mem::size_of::<T>())
-}
-
-unsafe fn from_u8<T : Sized>(source: &[u8]) -> &T
-{
-    let ptr = source.as_ptr() as *const T;
-    &*ptr
-}
 
 impl LogFile
 {
@@ -99,16 +109,33 @@ impl LogFile
                                , msg_header_size : msg_header_size
                                , version : VERSION
                                , file_header_size : file_header_size };
-        let hdr = unsafe{to_u8(&hdr)};
-        use std::io::Write;
-        try!{file.write(hdr)};
+        try!( Self::write_struct(&mut file, &hdr) );
         Ok(LogFile{file: file, seqnum : 0})
     }
 
+    fn validate(file: &mut std::fs::File, path: &Path) -> LogResult<u64> {
+        let mut parser = LogFileParser::new(file, path).unwrap();
+        let mut iter = parser.parse().unwrap();
+        let mut seqnum = 0;
+
+        if iter.header().magic != MAGIC {
+            return Err(LogError::new("invalid magic".to_string()))
+        }
+        if iter.header().version != VERSION {
+            return Err(LogError::new("invalid version".to_string()))
+        }
+
+        for msg in &mut iter {
+            match msg {
+                Err(err) => return Err(err),
+                Ok(msg)  => seqnum += 1
+            }
+        }
+        Ok(seqnum)
+    }
+    
     fn open(path : &Path, perm : Permission) -> std::io::Result<LogFile> {
-        use std::os::unix::fs::MetadataExt;
-        use std::io::Read;
-        use std::io::{Error,Seek,ErrorKind};
+        use std::io::{Error,ErrorKind};
 
         let mut file = try!{
             std::fs::OpenOptions::new()
@@ -116,41 +143,10 @@ impl LogFile
                 .read(true)
                 .open(path)
         };
-        let mut seqnum = 0;
-        let metadata = try!{std::fs::metadata(path)};
-        let mut size = metadata.size() as usize;
-        let file_header_size = std::mem::size_of::<FileHeader>();
-        if size < file_header_size {
-            return Err(Error::new(ErrorKind::InvalidData, "file too small"))
+        match Self::validate(&mut file, path) {
+            Ok(seqnum) => Ok(LogFile{file: file, seqnum : seqnum} ),
+            Err(err)   => Err(Error::new(ErrorKind::InvalidData, err))
         }
-        let mut buff : Vec<u8> = vec![0 ; file_header_size];
-        try!(file.read(&mut buff));
-        let hdr = unsafe { from_u8::<FileHeader>(&buff) };
-        if hdr.magic != MAGIC {
-            return Err(Error::new(ErrorKind::InvalidData, "invalid magic"))
-        }
-        if hdr.version != VERSION {
-            return Err(Error::new(ErrorKind::InvalidData, "invalid version"))
-        }
-        size -= file_header_size;
-        while size > 0 {
-            let mut buff : Vec<u8> = vec![0; hdr.msg_header_size as usize];
-            if size < hdr.msg_header_size as usize {
-                return Err(Error::new(ErrorKind::InvalidData
-                                      , "invalid file size"))
-            }
-            size -= hdr.msg_header_size as usize;
-            try!(file.read(&mut buff));
-            let hdr = unsafe { from_u8::<MessageHeader>(&buff) };
-            if size < hdr.length as usize {
-                return Err(Error::new(ErrorKind::InvalidData
-                                      , "invalid message size"))
-            }
-            size -= hdr.length as usize;
-            file.seek(std::io::SeekFrom::Current(hdr.length as i64));
-            seqnum += 1;
-        }
-        Ok(LogFile{file: file, seqnum : seqnum} )
     }
 
     pub fn new( path : &str, perm : Permission ) -> LogResult<LogFile> {
@@ -161,31 +157,34 @@ impl LogFile
         let file = func(path, perm);
         match file {
             Ok(file) => Ok(file),
-            Err(err) => return Err(LogError{ msg: err.to_string() })
+            Err(err) => return Err(LogError::new(err.to_string()))
         }
     }
 
     pub fn write(&mut self, time: Time, msg_type: u16
                  , data: &[u8]) -> LogResult<u64> {
         use std::io::Write;
-        let hdr = MessageHeader { time : time,
-                                  seqnum : self.seqnum,
-                                  length: data.len() as u32,
-                                  checksum : 0,
-                                  msg_type : msg_type };
-        let hdr_bytes = unsafe{to_u8(&hdr)};
-        let result = self.file.write(hdr_bytes);
-        match result {
-            Err(err) => return Err(LogError{ msg: err.to_string() } ),
-            _ => ()
+        let hdr = MessageHeader::new(time, self.seqnum
+                                     , data.len() as u32, 0, msg_type);
+        let result = Self::write_struct(&mut self.file, &hdr);
+        if let Err(err) = result {
+            return Err(LogError::new(err.to_string()));
         };
         let result = self.file.write(data);
         match result {
-            Err(err) => return Err(LogError{ msg: err.to_string() } ),
+            Err(err) => return Err(LogError::new(err.to_string())),
             _        => {
                 self.seqnum += 1;
-                Ok(self.seqnum)
+                Ok(self.seqnum - 1)
             }
         }
     }
+
+    fn write_struct<T>(file: &mut std::fs::File, data: &T) -> std::io::Result<usize> {
+        let ptr : *const u8 = data as *const T as *const u8;
+        let data = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<T>()) };
+        use std::io::Write;
+        file.write(data)
+    }
+
 }
