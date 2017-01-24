@@ -135,7 +135,6 @@ impl LogFile
         size -= file_header_size;
         while size > 0 {
             let mut buff : Vec<u8> = vec![0; hdr.msg_header_size as usize];
-            println!("{}", size);
             if size < hdr.msg_header_size as usize {
                 return Err(Error::new(ErrorKind::InvalidData
                                       , "invalid file size"))
@@ -143,13 +142,12 @@ impl LogFile
             size -= hdr.msg_header_size as usize;
             try!(file.read(&mut buff));
             let hdr = unsafe { from_u8::<MessageHeader>(&buff) };
-            println!("\t --- {}", hdr.length);
             if size < hdr.length as usize {
                 return Err(Error::new(ErrorKind::InvalidData
                                       , "invalid message size"))
             }
             size -= hdr.length as usize;
-            file.seek(std::io::SeekFrom::Current(0));
+            file.seek(std::io::SeekFrom::Current(hdr.length as i64));
             seqnum += 1;
         }
         Ok(LogFile{file: file, seqnum : seqnum} )
