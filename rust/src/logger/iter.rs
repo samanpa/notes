@@ -102,7 +102,7 @@ impl<'a> LogFileParser<'a> {
         }
 
         self.buff = vec![0; file_header_size];
-        if let Err(err) = self.file.read_exact(&mut self.buff) {
+        if let Err(_) = self.file.read_exact(&mut self.buff) {
             return error("Could not read header").unwrap();
         }
         
