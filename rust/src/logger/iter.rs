@@ -28,7 +28,7 @@ fn error<T>(msg: &str) -> Option<LogResult<T>> {
 impl <'a> Iterator for MessageIterator<'a> {
     type Item = LogResult<Message>;
 
-    fn next(&mut self) -> Option<LogResult<Message>> {
+    fn next(&mut self) -> Option<Self::Item> {
         use std::io::Read;
 
         if self.remaining_size <= 0 {
@@ -80,7 +80,7 @@ pub struct LogFileIterator<'a>
 
 impl<'a> LogFileParser<'a> {
     pub fn new(file: &'a std::fs::File, path: &'a std::path::Path)
-               -> LogResult<LogFileParser<'a>> {
+               -> LogResult<Self> {
         use std::os::unix::fs::MetadataExt;
 
         let metadata = std::fs::metadata(path);
@@ -102,7 +102,7 @@ impl<'a> LogFileParser<'a> {
         }
 
         self.buff = vec![0; file_header_size];
-        if let Err(err) = self.file.read_exact(&mut self.buff) {
+        if let Err(_) = self.file.read_exact(&mut self.buff) {
             return error("Could not read header").unwrap();
         }
         

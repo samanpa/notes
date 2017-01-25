@@ -1,8 +1,21 @@
 #[repr(C)]
 pub struct Time {
-    pub ns : u64 
+    ns : u64 
 }
 
+impl Clone for Time {
+    fn clone(&self) -> Time {
+        Time{ns : self.ns}
+    }
+}
+
+use std;
+use std::cmp::Ordering;
+impl std::cmp::PartialOrd for Time {
+    fn partial_cmp(&self, other: &Time) -> Option<Ordering> {
+        Some(self.ns.partial_cmp(other.ns))
+    }
+}
 
 #[cfg(not(target_os = "linux"))]
 pub fn now() -> Time {

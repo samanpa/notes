@@ -45,7 +45,7 @@ impl MessageHeader
     }
 
     pub fn time(&self) -> Time {
-        Time{ns : self.time.ns}
+        self.time.clone()
     }
     
     pub fn seqnum(&self) -> u64 {
@@ -128,7 +128,7 @@ impl LogFile
         for msg in &mut iter {
             match msg {
                 Err(err) => return Err(err),
-                Ok(msg)  => seqnum += 1
+                Ok(_)    => seqnum += 1
             }
         }
         Ok(seqnum)
