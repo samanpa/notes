@@ -3,4 +3,8 @@ name = "notes"
 version = "0.1.0"
 authors = ["Kojo Adams <samanpa@gmail.com>"]
 
+[profile.release]
+debug = true
+
 [dependencies]
+libc= { git = "https://github.com/rust-lang/libc.git" }

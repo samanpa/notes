@@ -1,4 +1,14 @@
 [root]
 name = "notes"
 version = "0.1.0"
+dependencies = [
+ "libc 0.2.20 (git+https://github.com/rust-lang/libc.git)",
+]
 
+[[package]]
+name = "libc"
+version = "0.2.20"
+source = "git+https://github.com/rust-lang/libc.git#4eb6bf9cc9d18ca465f33f935e56e12d8b6d7493"
+
+[metadata]
+"checksum libc 0.2.20 (git+https://github.com/rust-lang/libc.git)" = "<none>"

@@ -1,4 +1,5 @@
 #[repr(C)]
+#[derive(Eq)]
 pub struct Time {
     ns : u64 
 }
@@ -10,10 +11,20 @@ impl Clone for Time {
 }
 
 use std;
-use std::cmp::Ordering;
+
+impl std::cmp::PartialEq for Time {
+    fn eq(&self, other: &Time) -> bool {
+        self.ns == other.ns
+    }
+}
 impl std::cmp::PartialOrd for Time {
-    fn partial_cmp(&self, other: &Time) -> Option<Ordering> {
-        Some(self.ns.partial_cmp(other.ns))
+    fn partial_cmp(&self, other: &Time) -> Option<std::cmp::Ordering> {
+        self.ns.partial_cmp(&other.ns)
+    }
+}
+impl std::cmp::Ord for Time {
+    fn cmp(&self, other: &Time) -> std::cmp::Ordering {
+        self.ns.cmp(&other.ns)
     }
 }
 

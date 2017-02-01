@@ -1,45 +1,65 @@
 use super::{Context, Time, TimerElapsed, Timer};
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 
 struct TimerEntry {
     time: Time,
     data: Box<TimerElapsed>,
-    prev: Option<Box<TimerEntry>>,
-    next: Option<Box<TimerEntry>>,
 }
+
+impl TimerEntry {
+    fn new(time : Time, data: Box<TimerElapsed>) -> Self {
+        TimerEntry{ time: time, data: data}
+    }
+}
+
+impl Ord for TimerEntry {
+    fn cmp(&self, other: &TimerEntry) -> Ordering {
+        self.time.cmp(&other.time)
+    }
+}
+impl PartialEq for TimerEntry {
+    fn eq(&self, other: &TimerEntry) -> bool {
+        self.time == other.time
+    }
+}
+impl PartialOrd for TimerEntry {
+    fn partial_cmp(&self, other: &TimerEntry) -> Option<Ordering>{
+        self.time.partial_cmp(&other.time)
+    }
+}
+impl Eq for TimerEntry {}
 
 struct SimpleTimer {
-    next : Option<Box<TimerEntry>>
+    entries : BinaryHeap<TimerEntry>,
 }
 
-impl SimpleTimer {
-    fn new() -> SimpleTimer {
-        SimpleTimer{ next: None }
+impl SimpleTimer{
+    fn new() -> Self {
+        SimpleTimer{ entries : BinaryHeap::new() }
     }
 }
 
 impl Timer for SimpleTimer {
     fn schedule(&mut self, ctx: &Context, cb: Box<TimerElapsed>, time: Time) {
-        let mut entry = TimerEntry{ time: time, data: cb, prev: None, next: None };
-        let mut prev = None;
-        let curr = &mut self.next;
-        loop {
-            match curr {
-                Some(ref next) if next.time <= time
-                    => {curr = &mut next }
-                _   => break
-            }
-        }
-        entry.next = curr;
-        entry.prev = prev;
+        let entry = TimerEntry::new(time, cb);
+        self.entries.push(entry);
+    }
 
-        if let Some(_) = prev {
-            prev.next = entry;
-        }
-        if let Some(_) = curr {
-            curr.prev = entry;
-        }
-        if curr == self.next {
-            self.next = entry;
+    fn process(&mut self, time: Time, ctx: &Context) {
+        loop {
+            let entry = self.entries.pop();
+            match entry {
+                None => break,
+                Some(entry) => {
+                    if entry.time > time {
+                        self.entries.push(entry);
+                        break;
+                    } else {
+                        (*entry.data).on_elapsed(&ctx, time)
+                    }
+                }
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ trait TimerElapsed {
 
 trait Timer {
     fn schedule(&mut self, ctx: &Context, cb: Box<TimerElapsed>, time: Time);
+    fn process(&mut self, time: Time, ctx: &Context);
 }
 
 
