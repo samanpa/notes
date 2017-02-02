@@ -1,21 +1,21 @@
-use super::{Context, Time, TimerElapsed, Timer};
+use super::{Context, Time, TimerTask, Timer};
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 
 struct TimerEntry {
     time: Time,
-    data: Box<TimerElapsed>,
+    task: Box<TimerTask>,
 }
 
 impl TimerEntry {
-    fn new(time : Time, data: Box<TimerElapsed>) -> Self {
-        TimerEntry{ time: time, data: data}
+    fn new(time : Time, task: Box<TimerTask>) -> Self {
+        TimerEntry{ time: time, task: task}
     }
 }
 
 impl Ord for TimerEntry {
     fn cmp(&self, other: &TimerEntry) -> Ordering {
-        self.time.cmp(&other.time)
+        self.time.cmp(&other.time).reverse()
     }
 }
 impl PartialEq for TimerEntry {
@@ -25,38 +25,38 @@ impl PartialEq for TimerEntry {
 }
 impl PartialOrd for TimerEntry {
     fn partial_cmp(&self, other: &TimerEntry) -> Option<Ordering>{
-        self.time.partial_cmp(&other.time)
+        self.time.partial_cmp(&other.time).map( |order| order.reverse())
     }
 }
 impl Eq for TimerEntry {}
 
-struct SimpleTimer {
+pub struct SimpleTimer {
     entries : BinaryHeap<TimerEntry>,
 }
 
 impl SimpleTimer{
-    fn new() -> Self {
+    pub fn new() -> Self {
         SimpleTimer{ entries : BinaryHeap::new() }
     }
 }
 
 impl Timer for SimpleTimer {
-    fn schedule(&mut self, ctx: &Context, cb: Box<TimerElapsed>, time: Time) {
+    fn schedule(&mut self, ctx: &Context, cb: Box<TimerTask>, time: Time) {
         let entry = TimerEntry::new(time, cb);
         self.entries.push(entry);
     }
 
-    fn process(&mut self, time: Time, ctx: &Context) {
+    fn process(&mut self, ctx: &Context, time: Time) {
         loop {
             let entry = self.entries.pop();
             match entry {
                 None => break,
                 Some(entry) => {
-                    if entry.time > time {
+                    if entry.time > time.clone() {
                         self.entries.push(entry);
                         break;
                     } else {
-                        (*entry.data).on_elapsed(&ctx, time)
+                        entry.task.run(&ctx, time.clone())
                     }
                 }
             }

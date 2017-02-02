@@ -9,14 +9,21 @@ pub struct Context {
     channel : u64,
 }
 
-trait TimerElapsed {
-    //Should we consume the callback object?
-    fn on_elapsed(self, ctx: &Context, time: Time);
+impl Context {
+    pub fn new(channel: u64) -> Self {
+        Context{ event_time : Time::now(),
+                 exchange_time: Time::now(),
+                 channel: channel }
+    }
 }
 
-trait Timer {
-    fn schedule(&mut self, ctx: &Context, cb: Box<TimerElapsed>, time: Time);
-    fn process(&mut self, time: Time, ctx: &Context);
+pub trait TimerTask {
+    fn run(&self, ctx: &Context, time: Time);
+}
+
+pub trait Timer {
+    fn schedule(&mut self, ctx: &Context, cb: Box<TimerTask>, time: Time);
+    fn process(&mut self, ctx: &Context, time: Time);
 }
 
 
