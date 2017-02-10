@@ -33,8 +33,17 @@ impl std::cmp::Ord for Time {
 impl std::ops::Add<Duration> for Time {
     type Output = Time;
     fn add(self, duration: Duration) -> Time {
-        let dur_ns = duration.as_secs() * 1000_0000_0000u64 + duration.subsec_nanos() as u64;
+        let dur_ns = duration.as_secs() * 1000_000_000u64 + duration.subsec_nanos() as u64;
         return Time::new(self.ns + dur_ns)
+    }
+}
+
+impl std::ops::Sub<Time> for Time {
+    type Output = Duration;
+    fn sub(self, other: Time) -> Duration {
+        let res = self.ns - other.ns;
+        return Duration::new(res / 1000_000_000u64
+                             , (res % 1000_000_000u64) as u32);
     }
 }
 

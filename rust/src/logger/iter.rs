@@ -1,6 +1,5 @@
 use std;
 use logger::logfile::*;
-use logger::error::{LogResult,LogError};
 
 pub struct Message {
     pub hdr : MessageHeader,

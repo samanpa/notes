@@ -1,8 +1,13 @@
 pub mod time;
 pub mod simpletimer;
+pub mod error;
+pub mod reactor;
+pub mod event;
+pub mod tcpclient;
 
 pub use self::time::Time;
 
+#[allow(dead_code)]
 pub struct Context {
     event_time : Time,
     exchange_time : Time,
@@ -15,6 +20,7 @@ impl Context {
                  exchange_time: Time::now(),
                  channel: channel }
     }
+
 }
 
 pub trait TimerTask {

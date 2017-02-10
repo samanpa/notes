@@ -1,7 +1,10 @@
 use std;
 use core::time::Time;
-use super::error::*;
 use super::iter::*;
+use core::error::Error;
+
+pub type LogError = Error;
+pub type LogResult<T> = std::result::Result<T,LogError>;
 
 #[repr(C)]
 pub struct FileHeader
@@ -119,10 +122,10 @@ impl LogFile
         let mut seqnum = 0;
 
         if iter.header().magic != MAGIC {
-            return Err(LogError::new("invalid magic".to_string()))
+            return Err(LogError::from_str("invalid magic"))
         }
         if iter.header().version != VERSION {
-            return Err(LogError::new("invalid version".to_string()))
+            return Err(LogError::from_str("invalid version"))
         }
 
         for msg in &mut iter {

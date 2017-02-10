@@ -1,6 +1,6 @@
 pub mod core;
 pub mod logger;
-pub mod notes;
+//pub mod notes;
 
 
 #[cfg(test)]
