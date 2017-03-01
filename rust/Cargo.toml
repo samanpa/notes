@@ -7,4 +7,4 @@ authors = ["Kojo Adams <samanpa@gmail.com>"]
 debug = true
 
 [dependencies]
-libc= { git = "https://github.com/rust-lang/libc.git" }
+libc = "0.2"

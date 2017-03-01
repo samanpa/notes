@@ -5,6 +5,9 @@ pub struct Error {
     msg : std::string::String,
 }
 
+pub type Result<T> = std::result::Result<T, Error>;
+
+
 impl Error {
     pub fn new(msg : std::string::String) -> Error {
         Error{msg: msg}

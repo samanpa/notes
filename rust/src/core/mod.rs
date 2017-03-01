@@ -3,7 +3,7 @@ pub mod simpletimer;
 pub mod error;
 pub mod reactor;
 pub mod event;
-pub mod tcpclient;
+pub mod net;
 
 pub use self::time::Time;
 

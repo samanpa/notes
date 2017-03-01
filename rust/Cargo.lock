@@ -2,13 +2,13 @@
 name = "notes"
 version = "0.1.0"
 dependencies = [
- "libc 0.2.20 (git+https://github.com/rust-lang/libc.git)",
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "libc"
 version = "0.2.20"
-source = "git+https://github.com/rust-lang/libc.git#4eb6bf9cc9d18ca465f33f935e56e12d8b6d7493"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
-"checksum libc 0.2.20 (git+https://github.com/rust-lang/libc.git)" = "<none>"
+"checksum libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)" = "684f330624d8c3784fb9558ca46c4ce488073a8d22450415c5eb4f4cfb0d11b5"
