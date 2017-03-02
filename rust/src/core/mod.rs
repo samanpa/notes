@@ -32,5 +32,3 @@ pub trait Timer {
     fn process(&mut self, ctx: &Context, time: Time);
 }
 
-
-
