@@ -1,7 +1,7 @@
 extern crate notes;
 
 use notes::core::{Time, TimerTask, Context, Timer};
-use notes::core::{simpletimer, reactor};
+use notes::core::{simpletimer, reactor, event};
 use notes::logger::{LogFile,Permission};
 
 struct Printer {}
@@ -38,34 +38,45 @@ fn main()
     let end = 1000_0000;
 
     for x in 0..end {
-        timer.schedule(&ctx, print(), add(&time, x));
+        //timer.schedule(&ctx, print(), add(&time, x));
     }
     let start_time = Time::now();
     for x in 0..end {
-        (*timer).process(&ctx, add(&time, x));
+        //(*timer).process(&ctx, add(&time, x));
     }
 
     let time_diff = Time::now() - start_time;
     println!("{:?}", time_diff);
-    
+
+    run_client()
 }
 
 
 
 fn run_client()
 {
+    use notes::core::net::tcp;
     let timer = simpletimer::SimpleTimer::new();
 
     //let start_time = Time::now();
 
     let mut reactor = reactor::Reactor::new(timer);
-    //let tcp_client = Rc::new(TcpClient::new(reactor, ));
-    /*
-    tcp_client.on_connect( 
-*/
-    let _ = reactor.as_mut().map(|reactor| {
-        let mut ctx = Context::new(0);
-        reactor.run(&mut ctx, true);
-    });
-    
+
+    let addr = "127.0.0.1:9999".parse().unwrap();
+    let stream = tcp::TcpStream::connect(&addr);
+
+    match stream {
+        Err(err) => {
+            println!("{}", err);
+            return;
+        }
+        Ok(stream)  => {
+            let _ = reactor.as_mut().map(|reactor| {
+                let mut ctx = Context::new(0);
+                reactor.register(event::EventType::Read, std::rc::Rc::new(stream));
+                reactor.run(&mut ctx, true);
+            });
+        }
+    };
+
 }
