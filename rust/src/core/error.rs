@@ -15,6 +15,9 @@ impl Error {
     pub fn from_str(msg : &str) -> Error {
         Error{msg: msg.to_string()}
     }
+    pub fn from_err<E: std::error::Error>(e: E) -> Error {
+        Error::from_str(std::error::Error::description(&e))
+    }
 }
 
 impl std::fmt::Display for Error {

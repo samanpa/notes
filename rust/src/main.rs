@@ -60,23 +60,10 @@ fn run_client()
 
     //let start_time = Time::now();
 
-    let mut reactor = reactor::Reactor::new(timer);
+    let mut reactor = reactor::Reactor::new(timer).unwrap();
 
     let addr = "127.0.0.1:9999".parse().unwrap();
-    let stream = tcp::TcpStream::connect(&addr);
-
-    match stream {
-        Err(err) => {
-            println!("{}", err);
-            return;
-        }
-        Ok(stream)  => {
-            let _ = reactor.as_mut().map(|reactor| {
-                let mut ctx = Context::new(0);
-                reactor.register(event::EventType::Read, std::rc::Rc::new(stream));
-                reactor.run(&mut ctx, true);
-            });
-        }
-    };
-
+    let tcpclient = tcp::TcpClient::connect(&addr, reactor.handle());
+    let mut ctx = Context::new(0);
+    reactor.run(&mut ctx, true);
 }

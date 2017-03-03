@@ -1,11 +1,13 @@
 extern crate libc as c;
 
-use super::{Context, Time, Timer};
 use core;
+use core::{Context, Time, Timer};
 use core::error::{Error,Result};
 use core::event::{EventType,EventHandler};
+
 use std;
-use std::rc::Rc;
+use std::rc::{Rc,Weak};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 #[derive(Copy,Clone)]
@@ -27,6 +29,16 @@ impl std::cmp::Eq for Token {}
 
 pub struct Reactor<F>
     where F : Timer {
+    inner: Rc<RefCell<Inner<F>>>
+}
+
+pub struct Handle<F>
+    where F : Timer {
+    inner: Weak<RefCell<Inner<F>>>
+}
+
+pub struct Inner<F>
+    where F : Timer {
     timer : F,
     fd : c::c_int,
     run : bool,
@@ -46,14 +58,14 @@ fn from_event_type(ty: EventType) -> u32
     res as u32
 }
 
-impl<T> Reactor<T> where T : Timer {
-    pub fn new(timer: T) -> Result<Reactor<T>> {
+impl<T> Inner<T> where T : Timer {
+    pub fn new(timer: T) -> Result<Inner<T>> {
         let fd = unsafe{ c::epoll_create(c::EPOLL_CLOEXEC) };
         if fd == -1 {
             return Err(Error::from_str("Could not create epoll fd"))
         }
 
-        Ok(Reactor{timer: timer, fd: fd, run: false, curr_token: 0, events: HashMap::new()})
+        Ok(Inner{timer: timer, fd: fd, run: false, curr_token: 1, events: HashMap::new()})
     }
 
 
@@ -92,14 +104,65 @@ impl<T> Reactor<T> where T : Timer {
             Ok(_)  => {
                 self.events.insert(token, handler);
                 Ok(token)
+            },
+            Err(e) => Err(Error::from_err(e))
+        }
+    }
+
+    pub fn unregister(&mut self, token: Token) -> Result<()> {
+        let result = self.events.remove(&token).map( |handler| {
+            let mut event = c::epoll_event{events : 0, u64: 0};
+            let res = unsafe {
+                c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, handler.fd(), &mut event)
+            };
+            match core::to_result(res) {
+                Ok(_)  => Ok(()),
+                Err(e) => Err(Error::from_err(e))
             }
-            Err(e) => Err(Error::from_str(std::error::Error::description(&e)))
+        });
+        match result {
+            None    => Err(Error::from_str("Token not registerd")),
+            Some(r) => r
         }
     }
 }
 
-impl<T> Drop for Reactor<T>  where T : Timer {
-    fn drop(&mut self) {
-        unsafe{ c::close(self.fd); }
+impl<T> Handle<T> where T: Timer {
+    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+        if let Some(inner) = self.inner.upgrade() {
+            return inner.borrow_mut().register(ty, handler);
+        };
+        Err(Error::from_str("Destroyed"))
     }
 }
+
+impl<T> Clone for Handle<T> where T : Timer {
+    fn clone(&self) -> Self {
+        Handle{ inner: self.inner.clone() }
+    }
+}
+
+impl<T> Reactor<T> where T : Timer {
+    pub fn new(timer: T) -> Result<Reactor<T>> {
+        let inner = try!(Inner::new(timer));
+        Ok(Reactor{inner: Rc::new(RefCell::new(inner))})
+    }
+
+    pub fn stop(&mut self) {
+        self.inner.borrow_mut().stop();
+    }
+
+
+    pub fn handle(&self) -> Handle<T> {
+        Handle{ inner: Rc::downgrade(&self.inner) }
+    }
+
+    pub fn run(&mut self, ctx: &mut Context, live: bool) {
+        self.inner.borrow_mut().run(ctx, live);
+    }
+
+    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+        self.inner.borrow_mut().register(ty, handler)
+    }
+}
+
