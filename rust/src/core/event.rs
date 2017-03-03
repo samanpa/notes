@@ -6,6 +6,6 @@ pub enum EventType
 }
 
 pub trait EventHandler {
-    fn handle(&mut self);
-    fn get_fd(&self) -> i32;
+    fn process(&mut self, ctx: &mut super::Context);
+    fn fd(&self) -> i32;
 }

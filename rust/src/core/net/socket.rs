@@ -1,5 +1,6 @@
 extern crate libc as c;
 
+use core;
 use core::error::{Error,Result};
 use std::net::SocketAddrV4;
 use std;
@@ -37,7 +38,7 @@ impl Socket {
         let sockaddr = (&addr) as *const c::sockaddr_in as *const c::sockaddr;
         let ret = unsafe{ c::connect(self.fd(), sockaddr, addrlen) };
 
-        match super::to_result(ret) {
+        match core::to_result(ret) {
             Ok(_)  => Ok(()),
             Err(e) => {
                 let errno = e.raw_os_error().unwrap();
@@ -57,6 +58,7 @@ impl Drop for Socket {
     }
 }
 
+//Find better name
 pub fn addr2raw(addr: &SocketAddrV4) -> c::sockaddr_in {
     let ip = addr.ip();
     let octet = ip.octets();
@@ -70,4 +72,3 @@ pub fn addr2raw(addr: &SocketAddrV4) -> c::sockaddr_in {
                                sin_zero: [0u8; 8]};
     addr
 }
-
