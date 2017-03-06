@@ -1,7 +1,8 @@
 extern crate libc as c;
 
 use core;
-use core::{Context, Time, Timer};
+use core::simpletimer;
+use core::{Context, Time};
 use core::error::{Error,Result};
 use core::event::{EventType,EventHandler};
 
@@ -27,19 +28,16 @@ impl std::cmp::PartialEq for Token {
 impl std::cmp::Eq for Token {}
 
 
-pub struct Reactor<F>
-    where F : Timer {
-    inner: Rc<RefCell<Inner<F>>>
+pub struct Reactor {
+    inner: Rc<RefCell<Inner>>
 }
 
-pub struct Handle<F>
-    where F : Timer {
-    inner: Weak<RefCell<Inner<F>>>
+pub struct Handle{
+    inner: Weak<RefCell<Inner>>
 }
 
-pub struct Inner<F>
-    where F : Timer {
-    timer : F,
+pub struct Inner {
+    timer : simpletimer::SimpleTimer,
     fd : c::c_int,
     run : bool,
     curr_token: u64,
@@ -58,8 +56,10 @@ fn from_event_type(ty: EventType) -> u32
     res as u32
 }
 
-impl<T> Inner<T> where T : Timer {
-    pub fn new(timer: T) -> Result<Inner<T>> {
+impl Inner {
+    pub fn new() -> Result<Inner> {
+        let timer = simpletimer::SimpleTimer::new();
+
         let fd = unsafe{ c::epoll_create(c::EPOLL_CLOEXEC) };
         if fd == -1 {
             return Err(Error::from_str("Could not create epoll fd"))
@@ -127,8 +127,8 @@ impl<T> Inner<T> where T : Timer {
     }
 }
 
-impl<T> Handle<T> where T: Timer {
-    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+impl Handle {
+    pub fn register(&self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
         if let Some(inner) = self.inner.upgrade() {
             return inner.borrow_mut().register(ty, handler);
         };
@@ -136,15 +136,15 @@ impl<T> Handle<T> where T: Timer {
     }
 }
 
-impl<T> Clone for Handle<T> where T : Timer {
+impl Clone for Handle {
     fn clone(&self) -> Self {
         Handle{ inner: self.inner.clone() }
     }
 }
 
-impl<T> Reactor<T> where T : Timer {
-    pub fn new(timer: T) -> Result<Reactor<T>> {
-        let inner = try!(Inner::new(timer));
+impl Reactor {
+    pub fn new() -> Result<Reactor> {
+        let inner = try!(Inner::new());
         Ok(Reactor{inner: Rc::new(RefCell::new(inner))})
     }
 
@@ -153,7 +153,7 @@ impl<T> Reactor<T> where T : Timer {
     }
 
 
-    pub fn handle(&self) -> Handle<T> {
+    pub fn handle(&self) -> Handle {
         Handle{ inner: Rc::downgrade(&self.inner) }
     }
 

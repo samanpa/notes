@@ -56,11 +56,10 @@ fn main()
 fn run_client()
 {
     use notes::core::net::tcp;
-    let timer = simpletimer::SimpleTimer::new();
 
     //let start_time = Time::now();
 
-    let mut reactor = reactor::Reactor::new(timer).unwrap();
+    let mut reactor = reactor::Reactor::new().unwrap();
 
     let addr = "127.0.0.1:9999".parse().unwrap();
     let tcpclient = tcp::TcpClient::connect(&addr, reactor.handle());

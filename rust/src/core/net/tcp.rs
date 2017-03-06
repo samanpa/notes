@@ -22,16 +22,14 @@ pub struct TcpStream {
     sock : Socket
 }
 
-pub struct TcpClient<T> 
-    where T : Timer {
-    inner: RefCell<Inner<T>>
+pub struct TcpClient {
+    inner: RefCell<Inner>
 }
 
-pub struct Inner<T> 
-    where T : Timer {
+pub struct Inner {
     token: Option<core::reactor::Token>,
     stream: TcpStream,
-    reactor: core::reactor::Handle<T>,
+    reactor: core::reactor::Handle,
     state: TcpState,
 }
 
@@ -55,22 +53,22 @@ impl EventHandler for TcpStream {
 }
 
 
-impl <T> TcpClient<T> where T: Timer {
+impl TcpClient {
     //return an Rc seems wrong
-    pub fn connect(addr: &std::net::SocketAddrV4, reactor: core::reactor::Handle<T> ) -> Result<Rc<Self>> {
+    pub fn connect(addr: &std::net::SocketAddrV4, reactor: core::reactor::Handle ) -> Result<Rc<Self>> {
         let stream = try!(TcpStream::connect(addr));
         let inner  = Inner { token : None,
                              stream: stream,
                              reactor: reactor.clone(),
                              state: TcpState::NotInitialized };
         let client = Rc::new(TcpClient{ inner: RefCell::new(inner) });
-        let token = try!(reactor.register(EventType::Read, client.clone()));
+        let token = try!(reactor.register(EventType::Write, client.clone()));
         client.inner.borrow_mut().token = Some(token);
         Ok(client)
     }
 }
 
-impl <T> EventHandler for TcpClient<T> where T: Timer {
+impl EventHandler for TcpClient {
     fn process(&mut self, ctx: &mut core::Context) {
         self.inner.borrow_mut().stream.process(ctx);
     }
