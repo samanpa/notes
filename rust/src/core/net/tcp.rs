@@ -3,12 +3,11 @@ extern crate libc as c;
 use std;
 use core;
 use core::Timer;
+use plat::net::{EventType,Token,Socket};
 use core::error::{Error,Result};
 use core::event::*;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
-
-use super::socket::Socket;
 
 pub enum TcpState {
     Connected,
@@ -27,7 +26,7 @@ pub struct TcpClient {
 }
 
 pub struct Inner {
-    token: Option<core::reactor::Token>,
+    token: Option<Token>,
     stream: TcpStream,
     reactor: core::reactor::Handle,
     state: TcpState,
@@ -35,10 +34,15 @@ pub struct Inner {
 
 impl TcpStream {
     pub fn connect(addr: &std::net::SocketAddrV4) -> Result<TcpStream> {
-        let mut socket = try!(Socket::new(c::AF_INET, c::SOCK_STREAM, 0));
+        let mut socket = match Socket::new(c::AF_INET, c::SOCK_STREAM, 0) {
+            Ok(socket) => socket,
+            Err(e)     => return Err(Error::from_err(e))
+        };
         socket.nonblock();
-        try!(socket.connect(addr));
-        Ok(TcpStream{ sock: socket })
+        match socket.connect(addr) {
+            Ok(_) => Ok(TcpStream{ sock: socket }),
+            Err(e) => Err(Error::from_err(e))
+        }
     }
 }
 

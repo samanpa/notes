@@ -33,10 +33,3 @@ pub trait Timer {
     fn process(&mut self, ctx: &Context, time: Time);
 }
 
-pub fn to_result(res: c::c_int) -> std::io::Result<()> {
-    if res == -1 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
-}

@@ -1,3 +1,4 @@
+pub mod plat;
 pub mod core;
 pub mod logger;
 //pub mod notes;

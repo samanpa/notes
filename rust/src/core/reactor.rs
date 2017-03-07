@@ -1,32 +1,15 @@
-extern crate libc as c;
-
 use core;
 use core::simpletimer;
-use core::{Context, Time};
+use core::{Context,Time};
 use core::error::{Error,Result};
-use core::event::{EventType,EventHandler};
+use core::event::EventHandler;
 
 use std;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-#[derive(Copy,Clone)]
-pub struct Token(u64);
-
-impl std::hash::Hash for Token {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl std::cmp::PartialEq for Token {
-    fn eq(&self, other: &Token) -> bool {
-        return self.0 == other.0
-    }
-}
-impl std::cmp::Eq for Token {}
-
+use plat::net::{Events,EventType,Token,Selector};
 
 pub struct Reactor {
     inner: Rc<RefCell<Inner>>
@@ -38,46 +21,31 @@ pub struct Handle{
 
 pub struct Inner {
     timer : simpletimer::SimpleTimer,
-    fd : c::c_int,
     run : bool,
     curr_token: u64,
-    events : HashMap<Token, Rc<EventHandler>> //Seems slow
+    selector: Selector
 }
 
-
-fn from_event_type(ty: EventType) -> u32
-{
-    let res = match ty {
-        EventType::ReadWrite => c::EPOLLIN | c::EPOLLOUT,
-        EventType::Read      => c::EPOLLIN,
-        EventType::Write     => c::EPOLLOUT,
-    };
-
-    res as u32
-}
 
 impl Inner {
     pub fn new() -> Result<Inner> {
         let timer = simpletimer::SimpleTimer::new();
+        let selector = match Selector::new() {
+            Err(err) => return Err(Error::from_err(err)),
+            Ok(selector) => selector
+        };
 
-        let fd = unsafe{ c::epoll_create(c::EPOLL_CLOEXEC) };
-        if fd == -1 {
-            return Err(Error::from_str("Could not create epoll fd"))
-        }
-
-        Ok(Inner{timer: timer, fd: fd, run: false, curr_token: 1, events: HashMap::new()})
+        Ok(Inner{timer: timer, run: false, curr_token: 1, selector: selector})
     }
 
 
     fn run_once(&mut self, ctx: &mut Context, live: bool) {
-        let mut event = c::epoll_event{ events: 0, u64: 0 };
-        let max_events: c::c_int = 1;
-        let timeout: c::c_int  = 1000;
-        unsafe { c::epoll_wait(self.fd
-                               , &mut event as *mut c::epoll_event
-                               , max_events
-                               , timeout)
-        };
+        let mut events = Events::with_capacity(2);
+        self.selector.select(&mut events, 1000_000);
+        for event in &events {
+            println!("token {:?}", Selector::get_token(&event))
+        }
+        
     }
 
     fn stop(&mut self) {
@@ -94,35 +62,17 @@ impl Inner {
 
     pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
         self.curr_token += 1;
-        let token = Token(self.curr_token - 1);
-        let event_type = from_event_type(ty);
-        let mut event = c::epoll_event{events : event_type, u64: token.0};
-        let res = unsafe {
-            c::epoll_ctl(self.fd, c::EPOLL_CTL_ADD, handler.fd(), &mut event)
-        };
-        match core::to_result(res) {
-            Ok(_)  => {
-                self.events.insert(token, handler);
-                Ok(token)
-            },
+        let token = Token::new(self.curr_token - 1);
+        match self.selector.register(token, ty, handler.fd()) {
+            Ok(_)  => Ok(token),
             Err(e) => Err(Error::from_err(e))
         }
     }
 
     pub fn unregister(&mut self, token: Token) -> Result<()> {
-        let result = self.events.remove(&token).map( |handler| {
-            let mut event = c::epoll_event{events : 0, u64: 0};
-            let res = unsafe {
-                c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, handler.fd(), &mut event)
-            };
-            match core::to_result(res) {
-                Ok(_)  => Ok(()),
-                Err(e) => Err(Error::from_err(e))
-            }
-        });
-        match result {
-            None    => Err(Error::from_str("Token not registerd")),
-            Some(r) => r
+        match self.selector.unregister(token) {
+            Ok(_)  => Ok(()),
+            Err(e) => Err(Error::from_err(e))
         }
     }
 }

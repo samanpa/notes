@@ -1,7 +1,6 @@
 extern crate libc as c;
 
-use core;
-use core::error::{Error,Result};
+use std::io::{Error,Result};
 use std::net::SocketAddrV4;
 use std;
 
@@ -14,7 +13,7 @@ impl Socket {
     pub fn new(domain: c::c_int, sock_type: c::c_int, protocol: c::c_int) -> Result<Self> {
         let fd = unsafe{ c::socket(domain, sock_type, protocol) };
         if fd == -1 {
-            return Err(Error::from_str("Could not create string"));
+            return Err(Error::last_os_error());
         }
         Ok(Socket{ fd: fd })
     }
@@ -37,14 +36,14 @@ impl Socket {
         let addrlen = std::mem::size_of_val(&addr) as c::socklen_t;
         let sockaddr = (&addr) as *const c::sockaddr_in as *const c::sockaddr;
         let ret = unsafe{ c::connect(self.fd(), sockaddr, addrlen) };
-
-        match core::to_result(ret) {
+        
+        match super::to_result(ret) {
             Ok(_)  => Ok(()),
             Err(e) => {
                 let errno = e.raw_os_error().unwrap();
                 match errno as c::c_int {
                     c::EINPROGRESS => Ok(()),
-                    _ => Err(Error::from_str(std::error::Error::description(&e)))
+                    _ => Err(e)
                 }
             }
         }
