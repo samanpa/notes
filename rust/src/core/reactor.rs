@@ -1,4 +1,3 @@
-use core;
 use core::simpletimer;
 use core::{Context,Time};
 use core::error::{Error,Result};
@@ -9,7 +8,7 @@ use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use plat::net::{Events,EventType,Token,Selector};
+use plat::net::{Events,EventType,RawFd,Token,Selector};
 
 pub struct Reactor {
     inner: Rc<RefCell<Inner>>
@@ -23,9 +22,9 @@ pub struct Inner {
     timer : simpletimer::SimpleTimer,
     run : bool,
     curr_token: u64,
-    selector: Selector
+    selector: Selector,
+    events : HashMap<Token, RawFd>, //Seems slow
 }
-
 
 impl Inner {
     pub fn new() -> Result<Inner> {
@@ -35,13 +34,17 @@ impl Inner {
             Ok(selector) => selector
         };
 
-        Ok(Inner{timer: timer, run: false, curr_token: 1, selector: selector})
+        Ok(Inner{timer: timer
+                 , run: false
+                 , curr_token: 1
+                 , selector: selector
+                 , events: HashMap::new()})
     }
 
 
     fn run_once(&mut self, ctx: &mut Context, live: bool) {
         let mut events = Events::with_capacity(2);
-        self.selector.select(&mut events, 1000_000);
+        let _ = self.selector.select(&mut events, 1000_000);
         for event in &events {
             println!("token {:?}", Selector::get_token(&event))
         }
@@ -63,16 +66,22 @@ impl Inner {
     pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
         self.curr_token += 1;
         let token = Token::new(self.curr_token - 1);
-        match self.selector.register(token, ty, handler.fd()) {
+        let fd = handler.fd();
+        self.events.insert(token, fd);
+        match self.selector.register(token, ty, fd) {
             Ok(_)  => Ok(token),
             Err(e) => Err(Error::from_err(e))
         }
     }
 
     pub fn unregister(&mut self, token: Token) -> Result<()> {
-        match self.selector.unregister(token) {
-            Ok(_)  => Ok(()),
-            Err(e) => Err(Error::from_err(e))
+        let res = self.events.remove(&token).map( |fd| {
+            self.selector.unregister(token, fd )
+        });
+        match res {
+            None         => Err(Error::from_str("Token not found")),
+            Some(Ok(_))  => Ok(()),
+            Some(Err(e)) => Err(Error::from_err(e))
         }
     }
 }
@@ -115,4 +124,3 @@ impl Reactor {
         self.inner.borrow_mut().register(ty, handler)
     }
 }
-

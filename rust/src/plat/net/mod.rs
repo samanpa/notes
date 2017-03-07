@@ -15,6 +15,7 @@ pub enum EventType
 }
 
 pub type Events = self::epoll::Events;
+pub type RawFd = c::c_int;
 
 #[derive(Copy,Clone,Debug)]
 pub struct Token(u64);

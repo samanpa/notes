@@ -6,7 +6,6 @@ pub mod event;
 pub mod net;
 
 pub use self::time::Time;
-use std;
 extern crate libc as c;
 
 #[allow(dead_code)]

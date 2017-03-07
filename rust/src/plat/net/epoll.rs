@@ -1,25 +1,23 @@
 extern crate libc as c;
 
 use std;
-use std::collections::HashMap;
-use std::io::{Error,ErrorKind,Result};
+use std::io::{Error,Result};
 use std::vec::Vec;
 
-use super::{EventType,Token,Socket};
+use super::{EventType,Token};
 
 pub struct Selector {
     fd : c::c_int,
-    events : HashMap<Token, c::c_int> //Seems slow
 }
 
 pub type Event = c::epoll_event;
 pub struct Events {
-    events: std::vec::Vec<c::epoll_event>
+    events: Vec<c::epoll_event>
 }
 
 impl Events {
     pub fn with_capacity(size: usize) -> Self {
-        Events{ events: std::vec::Vec::with_capacity(size) }
+        Events{ events: Vec::with_capacity(size) }
     }
 }
 
@@ -50,7 +48,7 @@ impl Selector {
         let fd = unsafe{ c::epoll_create(c::EPOLL_CLOEXEC) };
         match fd {
             -1  => Err(Error::last_os_error()),
-            fd  => Ok(Selector{ fd: fd, events: HashMap::new() })
+            fd  => Ok(Selector{ fd: fd })
         }
     }
 
@@ -77,22 +75,14 @@ impl Selector {
         let res = unsafe {
             c::epoll_ctl(self.fd, c::EPOLL_CTL_ADD, fd, &mut event)
         };
-        let _ = try!(super::to_result(res));
-        self.events.insert(token, fd);
-        Ok(())
+        super::to_result(res)
     }
 
-    pub fn unregister(&mut self, token: Token) -> Result<()> {
-        let res = self.events.remove(&token).map( |fd| {
-            let mut event = c::epoll_event{events : 0, u64: 0};
-            let res = unsafe {
-                c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, fd, &mut event)
-            };
-            super::to_result(res)
-        });
-        match res {
-            None => Err(Error::new(ErrorKind::Other, "Token not found")),
-            Some(e) => e
-        }
+    pub fn unregister(&mut self, token: Token, fd: c::c_int) -> Result<()> {
+        let mut event = c::epoll_event{events : 0, u64: 0};
+        let res = unsafe {
+            c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, fd, &mut event)
+        };
+        super::to_result(res)
     }
 }

@@ -1,7 +1,7 @@
 extern crate libc as c;
 
 use std::io::{Error,Result};
-use std::net::SocketAddrV4;
+use std::net::{Ipv4Addr,SocketAddrV4};
 use std;
 
 pub struct Socket {
@@ -24,7 +24,7 @@ impl Socket {
         let res = unsafe {
             c::fcntl(self.fd, c::F_SETFL, status_flags | c::O_NONBLOCK)
         };
-        Ok(())
+        super::to_result(res)
     }
     
     pub fn fd(&self) -> c::c_int {
@@ -32,7 +32,7 @@ impl Socket {
     }
 
     pub fn connect(&self, addr: &SocketAddrV4) -> Result<()> {
-        let addr = addr2raw(addr);
+        let addr = addr_to_raw(addr);
         let addrlen = std::mem::size_of_val(&addr) as c::socklen_t;
         let sockaddr = (&addr) as *const c::sockaddr_in as *const c::sockaddr;
         let ret = unsafe{ c::connect(self.fd(), sockaddr, addrlen) };
@@ -47,7 +47,30 @@ impl Socket {
                 }
             }
         }
+    }
 
+    pub fn bind(&self, addr: &SocketAddrV4) -> Result<()> {
+        let addr = addr_to_raw(addr);
+        let addrlen = std::mem::size_of_val(&addr) as c::socklen_t;
+        let sockaddr = (&addr) as *const c::sockaddr_in as *const c::sockaddr;
+        let ret = unsafe{ c::bind(self.fd, sockaddr, addrlen) };
+        super::to_result(ret)
+    }
+
+    pub fn get_sock_name(&self) -> Result<SocketAddrV4> {
+        let inaddr = c::in_addr{ s_addr: 0 };
+        let mut addr = c::sockaddr_in{ sin_family: 0,
+                                       sin_port: 0,
+                                       sin_addr: inaddr,
+                                       sin_zero: [0u8; 8]};
+
+        let mut addrlen = std::mem::size_of_val(&addr) as c::socklen_t;
+        let mut sockaddr = (&mut addr) as *mut c::sockaddr_in as *mut c::sockaddr;
+        let ret = unsafe{ c::getsockname(self.fd, sockaddr, &mut addrlen as *mut c::socklen_t) };
+        match ret {
+            -1 => Err(Error::last_os_error()),
+            _  => Ok(raw_to_addr(&addr))
+        }
     }
 }
 
@@ -58,7 +81,7 @@ impl Drop for Socket {
 }
 
 //Find better name
-pub fn addr2raw(addr: &SocketAddrV4) -> c::sockaddr_in {
+pub fn addr_to_raw(addr: &SocketAddrV4) -> c::sockaddr_in {
     let ip = addr.ip();
     let octet = ip.octets();
     let inaddr = c::in_addr{ s_addr: (((octet[0] as u32) << 24) |
@@ -70,4 +93,12 @@ pub fn addr2raw(addr: &SocketAddrV4) -> c::sockaddr_in {
                                sin_addr: inaddr,
                                sin_zero: [0u8; 8]};
     addr
+}
+
+fn raw_to_addr(addr: &c::sockaddr_in) -> SocketAddrV4 {
+    let port  = addr.sin_port as u16;
+    let bits  = addr.sin_addr.s_addr.to_be();
+    let octet = [(bits >> 24) as u8, (bits >> 16) as u8, (bits >> 8) as u8, bits as u8];
+    let ip = Ipv4Addr::new(octet[0], octet[1], octet[2], octet[3]);
+    SocketAddrV4::new(ip, port.to_be())
 }
