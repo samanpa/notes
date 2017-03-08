@@ -56,7 +56,7 @@ impl Selector {
         Token(event.u64)
     }
     
-    pub fn select(&mut self, events: &mut Events, timeout_ns: u64) -> Result<()> {
+    pub fn poll(&mut self, events: &mut Events, timeout_ns: u64) -> Result<()> {
         let max_events = events.events.capacity() as c::c_int;
         let res = unsafe { c::epoll_wait(self.fd
                                          , events.events.as_mut_ptr()
@@ -78,7 +78,7 @@ impl Selector {
         super::to_result(res)
     }
 
-    pub fn unregister(&mut self, token: Token, fd: c::c_int) -> Result<()> {
+    pub fn unregister(&mut self, fd: c::c_int) -> Result<()> {
         let mut event = c::epoll_event{events : 0, u64: 0};
         let res = unsafe {
             c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, fd, &mut event)

@@ -27,7 +27,7 @@ impl Socket {
         super::to_result(res)
     }
     
-    pub fn fd(&self) -> c::c_int {
+    pub fn fd(&self) -> super::RawFd {
         self.fd
     }
 
@@ -47,6 +47,31 @@ impl Socket {
                 }
             }
         }
+    }
+
+    pub fn accept(&self) -> Result<(Socket, SocketAddrV4)> {
+        let inaddr = c::in_addr{ s_addr: 0 };
+        let mut addr = c::sockaddr_in{ sin_family: 0,
+                                       sin_port: 0,
+                                       sin_addr: inaddr,
+                                       sin_zero: [0u8; 8]};
+
+        let mut addrlen = std::mem::size_of_val(&addr) as c::socklen_t;
+        let mut sockaddr = (&mut addr) as *mut c::sockaddr_in as *mut c::sockaddr;
+        let fd = unsafe{ c::accept(self.fd, sockaddr, &mut addrlen as *mut c::socklen_t) };
+        match fd {
+            -1 => Err(Error::last_os_error()),
+            fd => {
+                let addr = raw_to_addr(&addr);
+                let sock = Socket{ fd: fd};
+                Ok((sock,addr))
+            }
+        }
+    }
+
+    pub fn listen(&self, backlog: u32) -> Result<()>{
+        let ret = unsafe{ c::listen(self.fd, backlog as c::c_int) };
+        super::to_result(ret)
     }
 
     pub fn bind(&self, addr: &SocketAddrV4) -> Result<()> {
