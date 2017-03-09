@@ -15,9 +15,6 @@ impl Error {
     pub fn from_str(msg : &str) -> Error {
         Error{msg: msg.to_string()}
     }
-    pub fn from_err<E: std::error::Error>(e: E) -> Error {
-        Error::from_str(std::error::Error::description(&e))
-    }
 }
 
 impl std::fmt::Display for Error {
@@ -29,5 +26,11 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         return &self.msg
+    }
+}
+
+impl std::convert::From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Error {
+        Error::from_str(std::error::Error::description(&e))
     }
 }

@@ -3,7 +3,7 @@ extern crate libc as c;
 use std;
 use core;
 use core::Timer;
-use plat::net::{EventType,Token,Socket};
+use plat::net::{EventType,Token,Socket,TcpStream};
 use core::error::{Error,Result};
 use core::event::*;
 use std::rc::{Rc,Weak};
@@ -17,10 +17,6 @@ pub enum TcpState {
     Closed
 }
 
-pub struct TcpStream {
-    sock : Socket
-}
-
 pub struct TcpClient {
     inner: RefCell<Inner>
 }
@@ -32,35 +28,12 @@ pub struct Inner {
     state: TcpState,
 }
 
-impl TcpStream {
-    pub fn connect(addr: &std::net::SocketAddrV4) -> Result<TcpStream> {
-        let mut socket = match Socket::new(c::AF_INET, c::SOCK_STREAM, 0) {
-            Ok(socket) => socket,
-            Err(e)     => return Err(Error::from_err(e))
-        };
-        socket.nonblock();
-        match socket.connect(addr) {
-            Ok(_) => Ok(TcpStream{ sock: socket }),
-            Err(e) => Err(Error::from_err(e))
-        }
-    }
-}
-
-impl EventHandler for TcpStream {
-    fn process(&mut self, ctx: &mut core::Context) {
-        println!("Handle event");
-    }
-
-    fn fd(&self) -> i32 {
-        self.sock.fd() as i32
-    }
-}
-
-
 impl TcpClient {
     //return an Rc seems wrong
     pub fn connect(addr: &std::net::SocketAddrV4, reactor: core::reactor::Handle ) -> Result<Rc<Self>> {
-        let stream = try!(TcpStream::connect(addr));
+        let stream = try!(TcpStream::new());
+        try!(stream.nonblock());
+        try!(stream.connect(addr));
         let inner  = Inner { token : None,
                              stream: stream,
                              reactor: reactor.clone(),
@@ -74,11 +47,11 @@ impl TcpClient {
 
 impl EventHandler for TcpClient {
     fn process(&mut self, ctx: &mut core::Context) {
-        self.inner.borrow_mut().stream.process(ctx);
+        println!("Handle event");
     }
 
     fn fd(&self) -> i32 {
-        self.inner.borrow_mut().stream.sock.fd() as i32
+        self.inner.borrow().stream.fd() as i32
     }
 }
 

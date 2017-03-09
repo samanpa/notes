@@ -66,7 +66,7 @@ impl Selector {
         if res > 0 {
             unsafe{ events.events.set_len(res as usize) };
         }
-        super::to_result(res)            
+        super::to_void_result(res)
     }
 
     pub fn register(&mut self, token: Token, ty: EventType, fd: c::c_int) -> Result<()> {
@@ -75,7 +75,7 @@ impl Selector {
         let res = unsafe {
             c::epoll_ctl(self.fd, c::EPOLL_CTL_ADD, fd, &mut event)
         };
-        super::to_result(res)
+        super::to_void_result(res)
     }
 
     pub fn unregister(&mut self, fd: c::c_int) -> Result<()> {
@@ -83,6 +83,6 @@ impl Selector {
         let res = unsafe {
             c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, fd, &mut event)
         };
-        super::to_result(res)
+        super::to_void_result(res)
     }
 }

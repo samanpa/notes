@@ -29,11 +29,7 @@ pub struct Inner {
 impl Inner {
     pub fn new() -> Result<Inner> {
         let timer = simpletimer::SimpleTimer::new();
-        let selector = match Selector::new() {
-            Err(err) => return Err(Error::from_err(err)),
-            Ok(selector) => selector
-        };
-
+        let selector = try!(Selector::new());
         Ok(Inner{timer: timer
                  , run: false
                  , curr_token: 1
@@ -44,7 +40,7 @@ impl Inner {
 
     fn run_once(&mut self, ctx: &mut Context, live: bool) {
         let mut events = Events::with_capacity(2);
-        let _ = self.selector.select(&mut events, 1000_000);
+        let _ = self.selector.poll(&mut events, 1000_000);
         for event in &events {
             println!("token {:?}", Selector::get_token(&event))
         }
@@ -70,18 +66,18 @@ impl Inner {
         self.events.insert(token, fd);
         match self.selector.register(token, ty, fd) {
             Ok(_)  => Ok(token),
-            Err(e) => Err(Error::from_err(e))
+            Err(e) => Err(Error::from(e))
         }
     }
 
     pub fn unregister(&mut self, token: Token) -> Result<()> {
         let res = self.events.remove(&token).map( |fd| {
-            self.selector.unregister(token, fd )
+            self.selector.unregister(fd )
         });
         match res {
             None         => Err(Error::from_str("Token not found")),
             Some(Ok(_))  => Ok(()),
-            Some(Err(e)) => Err(Error::from_err(e))
+            Some(Err(e)) => Err(Error::from(e))
         }
     }
 }

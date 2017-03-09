@@ -1,3 +1,4 @@
+pub mod addr;
 pub mod socket;
 pub mod epoll;
 pub mod tcp;
@@ -46,10 +47,18 @@ impl std::cmp::PartialEq for Token {
 impl std::cmp::Eq for Token {}
 
 
-pub fn to_result(res: c::c_int) -> std::io::Result<()> {
+pub fn to_void_result(res: c::c_int) -> std::io::Result<()> {
     if res == -1 {
         Err(std::io::Error::last_os_error())
     } else {
         Ok(())
+    }
+}
+
+pub fn to_result(res: c::c_int) -> std::io::Result<c::c_int> {
+    if res == -1 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(res)
     }
 }
