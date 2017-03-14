@@ -47,18 +47,28 @@ impl std::cmp::PartialEq for Token {
 impl std::cmp::Eq for Token {}
 
 
-pub fn to_void_result(res: c::c_int) -> std::io::Result<()> {
-    if res == -1 {
+trait IsMinusOne {
+    fn is_minus_one(&self) -> bool;
+}
+impl IsMinusOne for i32 {
+    fn is_minus_one(&self) -> bool { *self == -1 }
+}
+impl IsMinusOne for isize {
+    fn is_minus_one(&self) -> bool { *self == -1 }
+}
+fn cvt<T: IsMinusOne>(t: T) -> std::io::Result<T> {
+    if t.is_minus_one() {
         Err(std::io::Error::last_os_error())
     } else {
-        Ok(())
+        Ok(t)
     }
 }
 
-pub fn to_result(res: c::c_int) -> std::io::Result<c::c_int> {
-    if res == -1 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(res)
-    }
+fn to_void_result(res: c::c_int) -> std::io::Result<()> {
+    cvt(res)
+        .map( |_| {} )
+}
+
+fn to_result<T: IsMinusOne>(res: T) -> std::io::Result<T> {
+    cvt(res)
 }

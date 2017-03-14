@@ -11,7 +11,7 @@ pub fn into_c_sockaddr(addr: &SocketAddrV4) -> c::sockaddr_in {
                                       ((octet[2] as u32) <<  8) |
                                       (octet[3] as u32)).to_be() };
     let addr = c::sockaddr_in{ sin_family: c::AF_INET as u16,
-                               sin_port: addr.port().to_be(),
+                               sin_port: u16::from_be(addr.port()),
                                sin_addr: inaddr,
                                sin_zero: [0u8; 8]};
     addr
