@@ -42,7 +42,8 @@ impl Inner {
         let mut events = Events::with_capacity(2);
         let _ = self.selector.poll(&mut events, 1000_000);
         for event in &events {
-            println!("token {:?}", Selector::get_token(&event))
+            let token = Selector::get_token(&event);
+            println!("token {:?}", token)
         }
         
     }
@@ -59,14 +60,23 @@ impl Inner {
         }
     }
 
-    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+    pub fn new_token(&mut self) -> Token {
         self.curr_token += 1;
-        let token = Token::new(self.curr_token - 1);
-        let fd = handler.fd();
-        self.events.insert(token, fd);
-        match self.selector.register(token, ty, fd) {
-            Ok(_)  => Ok(token),
-            Err(e) => Err(Error::from(e))
+        Token::new(self.curr_token - 1)
+    }
+    
+    pub fn register(&mut self, token: Token, ty: EventType, handler: Weak<EventHandler>) -> Result<()> {
+        let handler = handler.upgrade();
+        if let Some(handler) = handler {
+            let fd = handler.fd();
+            self.events.insert(token, fd);
+            match self.selector.register(token, ty, fd) {
+                Ok(_)  => Ok(()),
+                Err(e) => Err(Error::from(e))
+            }
+        }
+        else {
+            return Err(Error::from_str("EventHandler already dropped"))
         }
     }
 
@@ -83,9 +93,16 @@ impl Inner {
 }
 
 impl Handle {
-    pub fn register(&self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+    pub fn new_token(&self) -> Result<Token> {
+        match self.inner.upgrade() {
+            None => Err(Error::from_str("Destroyed")),
+            Some(inner) => Ok(inner.borrow_mut().new_token())
+        }
+    }
+    
+    pub fn register(&self, token: Token, ty: EventType, handler: Weak<EventHandler>) -> Result<()> {
         if let Some(inner) = self.inner.upgrade() {
-            return inner.borrow_mut().register(ty, handler);
+            return inner.borrow_mut().register(token, ty, handler);
         };
         Err(Error::from_str("Destroyed"))
     }
@@ -116,7 +133,7 @@ impl Reactor {
         self.inner.borrow_mut().run(ctx, live);
     }
 
-    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
-        self.inner.borrow_mut().register(ty, handler)
+    pub fn register(&mut self, token: Token, ty: EventType, handler: Weak<EventHandler>) -> Result<()> {
+        self.inner.borrow_mut().register(token, ty, handler)
     }
 }
