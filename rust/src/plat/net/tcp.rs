@@ -1,9 +1,9 @@
 extern crate libc as c;
 
-use std::io::{Error,ErrorKind,Result};
-use std::net::{Ipv4Addr,SocketAddrV4};
+use std::io::Result;
+use std::net::SocketAddrV4;
 use super::Socket;
-use super::addr::{into_c_sockaddr,from_c_sockaddr,to_ptr,to_mut_ptr};
+use super::addr::{from_c_sockaddr,to_mut_ptr};
 use std;
 
 pub struct TcpStream {
@@ -41,10 +41,8 @@ impl std::io::Read for TcpStream {
         let len = unsafe{ c::read(self.socket.fd()
                                   , buff.as_mut_ptr() as *mut c::c_void
                                   , buff.len()) };
-        match len {
-            len if len < 0 => Err(Error::last_os_error()),
-            len => Ok(len as usize)
-        }
+        super::to_result(len)
+            .map( |len| len as usize)
     }
 }
 
