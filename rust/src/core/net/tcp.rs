@@ -22,15 +22,17 @@ pub struct TcpClient {
 }
 
 pub struct TcpHandle {
-    inner: Weak<RefCell<Inner>>
+    inner: Weak<RefCell<Inner>>,
+    fd: ::plat::net::RawFd
 }
 
-pub struct Inner {
+struct Inner {
     token: Token,
     stream: TcpStream,
     reactor: core::reactor::Handle,
     state: TcpState,
 }
+
 
 impl TcpClient {
     //return an Rc seems wrong
@@ -39,13 +41,14 @@ impl TcpClient {
         try!(stream.nonblock());
         try!(stream.connect(addr));
         let token = try!(reactor.new_token());
+        let fd = stream.fd();
         let inner  = Inner { token: token,
                              stream: stream,
                              reactor: reactor.clone(),
                              state: TcpState::NotInitialized };
         let inner = Rc::new(RefCell::new(inner));
-        let weak = Rc::downgrade(&inner);
-        let token = try!(reactor.register(token, EventType::Write, weak));
+        let handle = TcpHandle{ inner: Rc::downgrade(&inner), fd: fd };
+        try!(reactor.register(token, EventType::Write, Box::new(handle)));
         let client = TcpClient{ inner: inner };
         Ok(client)
     }
@@ -57,19 +60,21 @@ impl EventHandler for Inner
         println!("Handle event");
     }
 
-    fn fd(&self) -> i32 {
+    fn fd(&self) -> ::plat::net::RawFd {
         self.stream.fd()
     }
 
 }
-impl EventHandler for RefCell<Inner>
+
+impl EventHandler for TcpHandle
 {
     fn process(&mut self, ctx: &mut core::Context) {
-        self.borrow_mut().process(ctx)
+        self.inner.upgrade()
+            .map( |inner| inner.borrow_mut().process(ctx) );
     }
 
-    fn fd(&self) -> i32 {
-        self.borrow().fd()
+    fn fd(&self) -> ::plat::net::RawFd {
+        self.fd
     }
 }
 
@@ -78,8 +83,8 @@ impl EventHandler for TcpClient {
         self.inner.borrow_mut().process(ctx)
     }
 
-    fn fd(&self) -> i32 {
-        self.inner.fd()
+    fn fd(&self) -> ::plat::net::RawFd {
+        self.inner.borrow().fd()
     }
 }
 

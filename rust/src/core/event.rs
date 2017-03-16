@@ -1,4 +1,4 @@
 pub trait EventHandler {
     fn process(&mut self, ctx: &mut super::Context);
-    fn fd(&self) -> i32;
+    fn fd(&self) -> ::plat::net::RawFd;
 }
