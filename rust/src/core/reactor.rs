@@ -4,6 +4,7 @@ use core::error::{Error,Result};
 use core::event::EventHandler;
 
 use std;
+use std::boxed::Box;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,12 +19,17 @@ pub struct Handle{
     inner: Weak<RefCell<Inner>>
 }
 
-pub struct Inner {
+struct Event {
+    fd: RawFd,
+    handler: Box<EventHandler>
+}
+
+struct Inner {
     timer : simpletimer::SimpleTimer,
     run : bool,
     curr_token: u64,
     selector: Selector,
-    events : HashMap<Token, RawFd>, //Seems slow
+    events : HashMap<Token, Event>,
 }
 
 impl Inner {
@@ -42,7 +48,11 @@ impl Inner {
         let mut events = Events::with_capacity(2);
         let _ = self.selector.poll(&mut events, 1000_000);
         for event in &events {
-            println!("token {:?}", Selector::get_token(&event))
+            let token = Selector::get_token(&event);
+            self.events.get_mut(&token)
+                .map( |ref mut event| {
+                    event.handler.process(ctx)
+                } );
         }
         
     }
@@ -59,19 +69,23 @@ impl Inner {
         }
     }
 
-    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+    pub fn new_token(&mut self) -> Token {
         self.curr_token += 1;
-        let token = Token::new(self.curr_token - 1);
+        Token::new(self.curr_token - 1)
+    }
+    
+    pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventHandler>) -> Result<()> {
         let fd = handler.fd();
-        self.events.insert(token, fd);
+        self.events.insert(token, Event{fd: fd, handler: handler});
         match self.selector.register(token, ty, fd) {
-            Ok(_)  => Ok(token),
+            Ok(_)  => Ok(()),
             Err(e) => Err(Error::from(e))
         }
     }
 
     pub fn unregister(&mut self, token: Token) -> Result<()> {
-        let res = self.events.remove(&token).map( |fd| {
+        //Fixme: Move this to the event loop?
+        let res = self.events.remove(&token).map( |Event{fd,handler}| {
             self.selector.unregister(fd )
         });
         match res {
@@ -83,9 +97,16 @@ impl Inner {
 }
 
 impl Handle {
-    pub fn register(&self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
+    pub fn new_token(&self) -> Result<Token> {
+        match self.inner.upgrade() {
+            None => Err(Error::from_str("Destroyed")),
+            Some(inner) => Ok(inner.borrow_mut().new_token())
+        }
+    }
+    
+    pub fn register(&self, token: Token, ty: EventType, handler: Box<EventHandler>) -> Result<()> {
         if let Some(inner) = self.inner.upgrade() {
-            return inner.borrow_mut().register(ty, handler);
+            return inner.borrow_mut().register(token, ty, handler);
         };
         Err(Error::from_str("Destroyed"))
     }
@@ -116,7 +137,7 @@ impl Reactor {
         self.inner.borrow_mut().run(ctx, live);
     }
 
-    pub fn register(&mut self, ty: EventType, handler: Rc<EventHandler>) -> Result<Token> {
-        self.inner.borrow_mut().register(ty, handler)
+    pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventHandler>) -> Result<()> {
+        self.inner.borrow_mut().register(token, ty, handler)
     }
 }
