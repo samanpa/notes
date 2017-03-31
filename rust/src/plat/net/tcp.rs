@@ -22,6 +22,11 @@ impl TcpStream {
             .map( |socket| TcpStream{ socket: socket } )
     }
 
+    pub fn from(socket: Socket) -> Result<Self> {
+        try!( socket.nonblock());
+        Ok(TcpStream{socket: socket})
+    }
+
     pub fn nonblock(&self) -> Result<()> {
         self.socket.nonblock()
     }
@@ -46,11 +51,27 @@ impl std::io::Read for TcpStream {
     }
 }
 
+impl std::io::Write for TcpStream {
+    fn write(&mut self, buff: &[u8]) -> Result<usize> {
+        let len = unsafe{ c::write(self.socket.fd()
+                                   , buff.as_ptr() as *mut c::c_void
+                                   , buff.len()) };
+        super::to_result(len)
+            .map( |len| len as usize)
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
 
 impl TcpListener {
     pub fn new(addr: SocketAddrV4) -> Result<Self> {
-        Socket::new(c::AF_INET, c::SOCK_STREAM, 0)
-            .map( |socket| TcpListener{ socket: socket, addr: addr } )
+        let socket = try!(Socket::new(c::AF_INET, c::SOCK_STREAM, 0));
+        let _ = try!(socket.nonblock());
+        let _ = try!(socket.bind(&addr));
+        Ok(TcpListener{ socket: socket, addr: addr })
     }
 
     pub fn accept(&self) -> Result<(Socket, SocketAddrV4)> {
@@ -68,10 +89,12 @@ impl TcpListener {
         })
     }
 
+    pub fn fd(&self) -> super::RawFd {
+        self.socket.fd()
+    }
+
     pub fn listen(&self, backlog: u32) -> Result<()>{
         let ret = unsafe{ c::listen(self.socket.fd(), backlog as c::c_int) };
         super::to_void_result(ret)
     }
-
-
 }

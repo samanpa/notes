@@ -12,7 +12,7 @@ pub struct Selector {
 
 pub type Event = c::epoll_event;
 pub struct Events {
-    events: Vec<c::epoll_event>
+    events: Vec<Event>
 }
 
 impl Events {
