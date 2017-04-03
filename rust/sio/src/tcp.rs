@@ -68,9 +68,11 @@ impl std::io::Write for TcpStream {
 
 impl TcpListener {
     pub fn new(addr: SocketAddrV4) -> Result<Self> {
-        let socket = try!(Socket::new(c::AF_INET, c::SOCK_STREAM, 0));
+        let one: c::c_int = 1;
+        let mut socket = try!(Socket::new(c::AF_INET, c::SOCK_STREAM, 0));
         let _ = try!(socket.nonblock());
         let _ = try!(socket.bind(&addr));
+        let _ = try!(socket.set_sock_opt(c::SO_REUSEADDR, &one));
         Ok(TcpListener{ socket: socket, addr: addr })
     }
 

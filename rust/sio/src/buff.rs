@@ -10,8 +10,7 @@ pub struct Buff {
 
 impl Buff {
     pub fn with_capacity(size: usize) -> Self {
-        let mut vec = Vec::with_capacity(size);
-        unsafe {vec.set_len(size)};
+        let vec = vec![0; size];
         Buff{data: vec, readpos: 0, limit: 0}
     }
 
@@ -24,7 +23,9 @@ impl Buff {
             self.compact();
         }
         else if self.limit == self.data.len() {
-            self.data.reserve(self.limit * 2);
+            self.data.reserve(self.limit);
+            let capacity = self.data.capacity();
+            unsafe{ self.data.set_len(capacity) };
         }
         
         unsafe { self.data.get_unchecked_mut(self.limit..) }

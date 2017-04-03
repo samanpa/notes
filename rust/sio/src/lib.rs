@@ -2,13 +2,15 @@ pub mod addr;
 pub mod socket;
 pub mod epoll;
 pub mod tcp;
+pub mod buff;
 
 extern crate libc as c;
 
-use std;
 pub use self::socket::Socket as Socket;
 pub use self::epoll::Selector as Selector;
 pub use self::tcp::TcpStream as TcpStream;
+pub use self::tcp::TcpListener as TcpListener;
+pub use self::buff::Buff as Buff;
 
 pub enum EventType
 {

@@ -1,0 +1,11 @@
+[package]
+name = "sio"
+version = "0.1.0"
+authors = ["Kojo Adams <kadams85@bloomberg.net>"]
+
+[profile.release]
+debug = true
+
+[dependencies]
+libc = "0.2"
+

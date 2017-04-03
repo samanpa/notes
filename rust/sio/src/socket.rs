@@ -1,5 +1,6 @@
 extern crate libc as c;
 
+use std;
 use std::io::Result;
 use std::net::SocketAddrV4;
 use super::addr::{into_c_sockaddr,from_c_sockaddr,to_ptr,to_mut_ptr};
@@ -60,6 +61,16 @@ impl Socket {
         let ret = unsafe{ c::getsockname(self.fd, sockaddr, &mut addrlen as *mut c::socklen_t) };
         super::to_void_result(ret)
             .map( |()| from_c_sockaddr(&addr) )
+    }
+
+    pub fn set_sock_opt<T>(&mut self, name: i32, val: &T) -> Result<i32> {
+        let res = unsafe {
+            c::setsockopt(self.fd, c::SOL_SOCKET
+                          , name as c::c_int
+                          , val as *const T as *const c::c_void
+                          , std::mem::size_of::<T>() as c::socklen_t)
+        };
+        super::to_result(res)
     }
 }
 
