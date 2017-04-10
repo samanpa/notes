@@ -2,9 +2,8 @@ extern crate libc as c;
 
 use std;
 use core;
-use core::Timer;
 use plat::net::{EventType,Token,TcpStream};
-use core::error::{Error,Result};
+use core::error::{Result};
 use core::event::*;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;

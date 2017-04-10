@@ -1,9 +1,8 @@
 use core::simpletimer;
-use core::{Context,Time};
+use core::Context;
 use core::error::{Error,Result};
 use core::event::EventHandler;
 
-use std;
 use std::boxed::Box;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
