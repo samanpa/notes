@@ -14,6 +14,19 @@ impl Buff {
         Buff{data: vec, readpos: 0, limit: 0}
     }
 
+    fn grow_by(&mut self, size: usize) {
+        self.data.reserve(size);
+        let capacity = self.data.capacity();
+        unsafe{ self.data.set_len(capacity) };
+    }
+
+    pub fn ensure(&mut self, size: usize) {
+        if self.limit + size > self.data.len() {
+            let increase = self.data.len() - self.limit - size;
+            self.grow_by(increase);
+        }
+    }
+    
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         if self.readpos == self.limit {
             self.readpos = 0;
@@ -23,15 +36,14 @@ impl Buff {
             self.compact();
         }
         else if self.limit == self.data.len() {
-            self.data.reserve(self.limit);
-            let capacity = self.data.capacity();
-            unsafe{ self.data.set_len(capacity) };
+            let increase = self.limit;
+            self.grow_by(increase);
         }
         
         unsafe { self.data.get_unchecked_mut(self.limit..) }
     }
 
-    pub fn as_slice(&mut self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         unsafe { self.data.get_unchecked(self.readpos..self.limit) }
     }
 
@@ -55,5 +67,17 @@ impl Buff {
         self.limit = size;
         self.readpos = 0;
     }
+
+    pub fn write(&mut self, data: &[u8]) {
+        self.ensure(data.len());
+        unsafe { self.unchecked_write(data) };
+    }
+    
+    pub unsafe fn unchecked_write(&mut self, data: &[u8]) {
+        let dest = self.data.as_mut_ptr().offset(self.limit as isize);
+        ptr::copy_nonoverlapping(data.as_ptr(), dest, data.len());
+        self.limit += data.len();
+    }
+    
     
 }

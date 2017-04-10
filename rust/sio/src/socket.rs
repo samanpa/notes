@@ -63,7 +63,7 @@ impl Socket {
             .map( |()| from_c_sockaddr(&addr) )
     }
 
-    pub fn set_sock_opt<T>(&mut self, name: i32, val: &T) -> Result<i32> {
+    pub fn set_sock_opt<T>(&self, name: i32, val: &T) -> Result<i32> {
         let res = unsafe {
             c::setsockopt(self.fd, c::SOL_SOCKET
                           , name as c::c_int
@@ -71,6 +71,17 @@ impl Socket {
                           , std::mem::size_of::<T>() as c::socklen_t)
         };
         super::to_result(res)
+    }
+
+    pub fn get_sock_opt<T>(&self, name: i32, val: &mut T) -> Result<()> {
+        let mut socklen = std::mem::size_of::<T>() as c::socklen_t;
+        let res = unsafe {
+            c::getsockopt(self.fd, c::SOL_SOCKET
+                          , name as c::c_int
+                          , val as *mut T as *mut c::c_void
+                          , &mut socklen as *mut c::socklen_t)
+        };
+        super::to_void_result(res)
     }
 }
 

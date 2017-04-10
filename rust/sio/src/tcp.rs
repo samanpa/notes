@@ -37,7 +37,13 @@ impl TcpStream {
 
     pub fn fd(&self) -> super::RawFd {
         self.socket.fd()
-    }    
+    }
+
+    pub fn has_sock_error(&self) -> Result<()> {
+        let mut err : c::c_int = 0;
+        try!(self.socket.get_sock_opt(c::SO_ERROR, &mut err));
+        super::to_void_result(err)
+    }
 }
 
 
@@ -69,7 +75,7 @@ impl std::io::Write for TcpStream {
 impl TcpListener {
     pub fn new(addr: SocketAddrV4) -> Result<Self> {
         let one: c::c_int = 1;
-        let mut socket = try!(Socket::new(c::AF_INET, c::SOCK_STREAM, 0));
+        let socket = try!(Socket::new(c::AF_INET, c::SOCK_STREAM, 0));
         let _ = try!(socket.nonblock());
         let _ = try!(socket.bind(&addr));
         let _ = try!(socket.set_sock_opt(c::SO_REUSEADDR, &one));

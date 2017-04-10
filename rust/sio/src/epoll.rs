@@ -3,6 +3,7 @@ extern crate libc as c;
 use std;
 use std::io::{Error,Result};
 use std::vec::Vec;
+use super::RawFd;
 
 use super::{EventType,Token};
 
@@ -31,7 +32,6 @@ impl<'a> IntoIterator for &'a Events {
 
 }
 
-
 fn from_event_type(ty: EventType) -> u32
 {
     let res = match ty {
@@ -39,7 +39,6 @@ fn from_event_type(ty: EventType) -> u32
         EventType::Read      => c::EPOLLIN,
         EventType::Write     => c::EPOLLOUT,
     };
-
     res as u32
 }
 
@@ -69,20 +68,25 @@ impl Selector {
         super::to_void_result(res)
     }
 
-    pub fn register(&mut self, token: Token, ty: EventType, fd: c::c_int) -> Result<()> {
-        let event_type = from_event_type(ty);
-        let mut event = c::epoll_event{events : event_type, u64: token.0};
-        let res = unsafe {
-            c::epoll_ctl(self.fd, c::EPOLL_CTL_ADD, fd, &mut event)
-        };
+    fn epoll_ctl(&mut self, op: c::c_int, fd: RawFd, event: &mut c::epoll_event) -> Result<()> {
+        let res = unsafe { c::epoll_ctl(self.fd, op, fd, event) };
         super::to_void_result(res)
     }
+    
+    pub fn register(&mut self, token: Token, ty: EventType, fd: RawFd) -> Result<()> {
+        let event_type = from_event_type(ty);
+        let mut event = c::epoll_event{events : event_type, u64: token.0};
+        self.epoll_ctl(c::EPOLL_CTL_ADD, fd, &mut event)
+    }
 
-    pub fn unregister(&mut self, fd: c::c_int) -> Result<()> {
+    pub fn modify(&mut self, token: Token, ty: EventType, fd: RawFd) -> Result<()> {
+        let event_type = from_event_type(ty);
+        let mut event = c::epoll_event{events : event_type, u64: token.0};
+        self.epoll_ctl(c::EPOLL_CTL_MOD, fd, &mut event)
+    }
+
+    pub fn unregister(&mut self, fd: self::RawFd) -> Result<()> {
         let mut event = c::epoll_event{events : 0, u64: 0};
-        let res = unsafe {
-            c::epoll_ctl(self.fd, c::EPOLL_CTL_DEL, fd, &mut event)
-        };
-        super::to_void_result(res)
+        self.epoll_ctl(c::EPOLL_CTL_DEL, fd, &mut event)
     }
 }
