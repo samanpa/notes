@@ -11,9 +11,27 @@ pub struct Selector {
     fd : c::c_int,
 }
 
-pub type Event = c::epoll_event;
+pub struct Event {
+    events: u32,
+    token: Token,
+}
+
 pub struct Events {
-    events: Vec<Event>
+    events: Vec<c::epoll_event>
+}
+
+impl Event {
+    pub fn get_token(&self) -> Token {
+        self.token
+    }
+
+    pub fn readable(&self) -> bool {
+        (self.events & c::EPOLLIN as u32) != 0
+    }
+
+    pub fn writeable(&self) -> bool {
+        (self.events & c::EPOLLOUT as u32) != 0
+    }
 }
 
 impl Events {
@@ -22,14 +40,27 @@ impl Events {
     }
 }
 
+pub struct EventIterator<'a> {
+    itr : std::slice::Iter<'a, c::epoll_event>
+}
+
+impl <'a> Iterator for EventIterator<'a> {
+    type Item = Event;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.itr.next().map( |event| {
+            Event{token: Token(event.u64), events: event.events}
+        } )
+    }
+}
+
 impl<'a> IntoIterator for &'a Events {
-    type Item = &'a Event;
-    type IntoIter = std::slice::Iter<'a, Event>;
+    type Item = Event;
+    type IntoIter = EventIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&self.events).into_iter()
+        EventIterator{ itr: (&self.events).into_iter()}
     }
-
 }
 
 fn from_event_type(ty: EventType) -> u32
@@ -51,10 +82,6 @@ impl Selector {
         }
     }
 
-    pub fn get_token(event : &Event) -> Token {
-        Token(event.u64)
-    }
-    
     pub fn poll(&mut self, events: &mut Events, timeout_ns: u64) -> Result<()> {
         let max_events = events.events.capacity() as c::c_int;
         let res = unsafe { c::epoll_wait(self.fd

@@ -2,9 +2,9 @@ extern crate libc as c;
 extern crate llio;
 
 use std;
-use llio::{EventType,Token,TcpStream};
+use llio::{EventType,TcpStream,Token};
 use ::error::Result;
-use ::reactor::EventHandler;
+use ::EventHandler;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 
@@ -23,6 +23,19 @@ pub struct TcpClient {
 pub struct TcpHandle {
     inner: Weak<RefCell<Inner>>,
     fd: llio::RawFd
+}
+
+pub enum TcpConnectingState {
+    Connected,
+    Connecting,
+    Error
+}
+
+struct TcpConnectingStream {
+    token: Token,
+    stream: TcpStream,
+    reactor: ::reactor::Handle,
+    state: TcpConnectingState
 }
 
 struct Inner {
@@ -44,10 +57,10 @@ impl TcpClient {
         let inner  = Inner { token: token,
                              stream: stream,
                              reactor: reactor.clone(),
-                             state: TcpState::NotInitialized };
-        let inner = Rc::new(RefCell::new(inner));
+                             state: TcpState::Connecting };
+        let inner  = Rc::new(RefCell::new(inner));
         let handle = TcpHandle{ inner: Rc::downgrade(&inner), fd: fd };
-        try!(reactor.register(token, EventType::Write, Box::new(handle)));
+        //try!(reactor.register(token, EventType::Write, Box::new(handle)));
         let client = TcpClient{ inner: inner };
         Ok(client)
     }
@@ -55,8 +68,8 @@ impl TcpClient {
 
 impl EventHandler for Inner
 {
-    fn process(&mut self, ctx: &mut ::Context) {
-        println!("Handle event");
+    fn process(&mut self, ctx: &mut ::Context) -> std::io::Result<()> {
+        Ok(())
     }
 
     fn fd(&self) -> llio::RawFd {
@@ -67,9 +80,10 @@ impl EventHandler for Inner
 
 impl EventHandler for TcpHandle
 {
-    fn process(&mut self, ctx: &mut ::Context) {
+    fn process(&mut self, ctx: &mut ::Context) -> std::io::Result<()> {
         self.inner.upgrade()
             .map( |inner| inner.borrow_mut().process(ctx) );
+        Ok(())
     }
 
     fn fd(&self) -> llio::RawFd {
@@ -78,8 +92,9 @@ impl EventHandler for TcpHandle
 }
 
 impl EventHandler for TcpClient {
-    fn process(&mut self, ctx: &mut ::Context) {
-        self.inner.borrow_mut().process(ctx)
+    fn process(&mut self, ctx: &mut ::Context) -> std::io::Result<()> {
+        self.inner.borrow_mut().process(ctx);
+        Ok(())
     }
 
     fn fd(&self) -> llio::RawFd {

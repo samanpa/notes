@@ -2,17 +2,14 @@ use super::heaptimer;
 use super::Context;
 use super::error::{Error,Result};
 
+use std;
 use std::boxed::Box;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use ::EventHandler;
 
 use llio::{Events,EventType,RawFd,Token,Selector};
-
-pub trait EventHandler {
-    fn process(&mut self, ctx: &mut super::Context);
-    fn fd(&self) -> ::llio::RawFd;
-}
 
 pub struct Reactor {
     inner: Rc<RefCell<Inner>>
@@ -36,7 +33,7 @@ struct Inner {
 }
 
 impl Inner {
-    pub fn new() -> Result<Inner> {
+    pub fn new() -> std::io::Result<Inner> {
         let timer = heaptimer::HeapTimer::new();
         let selector = try!(Selector::new());
         Ok(Inner{timer: timer
@@ -46,12 +43,11 @@ impl Inner {
                  , events: HashMap::new()})
     }
 
-
     fn run_once(&mut self, ctx: &mut Context, live: bool) {
         let mut events = Events::with_capacity(2);
         let _ = self.selector.poll(&mut events, 1000_000);
         for event in &events {
-            let token = Selector::get_token(&event);
+            let token = event.get_token();
             self.events.get_mut(&token)
                 .map( |ref mut event| {
                     event.handler.process(ctx)
@@ -77,13 +73,22 @@ impl Inner {
         Token::new(self.curr_token - 1)
     }
     
-    pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventHandler>) -> Result<()> {
+    pub fn register<H:'static + EventHandler>(&mut self, token: Token, ty: EventType, handler: H ) -> std::io::Result<()> {
         let fd = handler.fd();
-        self.events.insert(token, Event{fd: fd, handler: handler});
-        match self.selector.register(token, ty, fd) {
-            Ok(_)  => Ok(()),
-            Err(e) => Err(Error::from(e))
-        }
+        self.events.insert(token, Event{fd: fd, handler: Box::new(handler)});
+        self.selector.register(token, ty, fd)
+    }
+
+    pub fn modify<H: 'static + EventHandler>(&mut self, token: Token, ty: EventType, handler: H ) -> std::io::Result<()> {
+        let fd = handler.fd();
+        match self.events.get_mut(&token) {
+            None => return Err(Error::from_str("Invalid token")),
+            Some(h) => {
+                let _ = try!(self.selector.modify(token, ty, fd));
+                *h = Event{fd: fd, handler: Box::new(handler)};
+            }
+        };
+        Ok(())
     }
 
     pub fn unregister(&mut self, token: Token) -> Result<()> {
@@ -94,7 +99,7 @@ impl Inner {
         match res {
             None         => Err(Error::from_str("Token not found")),
             Some(Ok(_))  => Ok(()),
-            Some(Err(e)) => Err(Error::from(e))
+            Some(e)      => e
         }
     }
 }
@@ -107,9 +112,16 @@ impl Handle {
         }
     }
     
-    pub fn register(&self, token: Token, ty: EventType, handler: Box<EventHandler>) -> Result<()> {
+    pub fn register<H: 'static+EventHandler>(&self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         if let Some(inner) = self.inner.upgrade() {
             return inner.borrow_mut().register(token, ty, handler);
+        };
+        Err(Error::from_str("Destroyed"))
+    }
+
+    pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
+        if let Some(inner) = self.inner.upgrade() {
+            return inner.borrow_mut().modify(token, ty, handler);
         };
         Err(Error::from_str("Destroyed"))
     }
@@ -122,7 +134,7 @@ impl Clone for Handle {
 }
 
 impl Reactor {
-    pub fn new() -> Result<Reactor> {
+    pub fn new() -> std::io::Result<Reactor> {
         let inner = try!(Inner::new());
         Ok(Reactor{inner: Rc::new(RefCell::new(inner))})
     }
@@ -136,11 +148,16 @@ impl Reactor {
         Handle{ inner: Rc::downgrade(&self.inner) }
     }
 
-    pub fn run(&mut self, ctx: &mut Context, live: bool) {
-        self.inner.borrow_mut().run(ctx, live);
+    pub fn run(&mut self, ctx: &mut Context) {
+        self.inner.borrow_mut().run(ctx, true);
     }
 
-    pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventHandler>) -> Result<()> {
+    pub fn register<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         self.inner.borrow_mut().register(token, ty, handler)
+    }
+
+
+    pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
+        self.inner.borrow_mut().modify(token, ty, handler)
     }
 }
