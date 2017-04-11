@@ -3,6 +3,7 @@ name = "notes"
 version = "0.1.0"
 dependencies = [
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "llio 0.1.0",
  "sio 0.1.0",
 ]
 
@@ -12,10 +13,18 @@ version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "llio"
+version = "0.1.0"
+dependencies = [
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "sio"
 version = "0.1.0"
 dependencies = [
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "llio 0.1.0",
 ]
 
 [metadata]

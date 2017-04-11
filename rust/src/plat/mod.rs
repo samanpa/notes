@@ -1,3 +1,3 @@
-extern crate sio;
+extern crate llio;
 
-pub use self::sio as net;
+pub use self::llio as net;

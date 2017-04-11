@@ -1,11 +1,12 @@
 [package]
 name = "sio"
 version = "0.1.0"
-authors = ["Kojo Adams <kadams85@bloomberg.net>"]
+authors = ["Kojo Adams <samanpa@gmail.com>"]
 
 [profile.release]
 debug = true
 
 [dependencies]
 libc = "0.2"
+llio = { path = "../llio", version = "0.1.0" }
 

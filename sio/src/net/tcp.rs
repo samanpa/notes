@@ -1,10 +1,10 @@
 extern crate libc as c;
+extern crate llio;
 
 use std;
-use core;
-use plat::net::{EventType,Token,TcpStream};
-use core::error::{Result};
-use core::event::*;
+use llio::{EventType,Token,TcpStream};
+use ::error::Result;
+use ::reactor::EventHandler;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 
@@ -22,20 +22,20 @@ pub struct TcpClient {
 
 pub struct TcpHandle {
     inner: Weak<RefCell<Inner>>,
-    fd: ::plat::net::RawFd
+    fd: llio::RawFd
 }
 
 struct Inner {
     token: Token,
     stream: TcpStream,
-    reactor: core::reactor::Handle,
+    reactor: ::reactor::Handle,
     state: TcpState,
 }
 
 
 impl TcpClient {
     //return an Rc seems wrong
-    pub fn connect(addr: &std::net::SocketAddrV4, reactor: core::reactor::Handle ) -> Result<Self> {
+    pub fn connect(addr: &std::net::SocketAddrV4, reactor: ::reactor::Handle ) -> Result<Self> {
         let stream = try!(TcpStream::new());
         try!(stream.nonblock());
         try!(stream.connect(addr));
@@ -55,11 +55,11 @@ impl TcpClient {
 
 impl EventHandler for Inner
 {
-    fn process(&mut self, ctx: &mut core::Context) {
+    fn process(&mut self, ctx: &mut ::Context) {
         println!("Handle event");
     }
 
-    fn fd(&self) -> ::plat::net::RawFd {
+    fn fd(&self) -> llio::RawFd {
         self.stream.fd()
     }
 
@@ -67,22 +67,22 @@ impl EventHandler for Inner
 
 impl EventHandler for TcpHandle
 {
-    fn process(&mut self, ctx: &mut core::Context) {
+    fn process(&mut self, ctx: &mut ::Context) {
         self.inner.upgrade()
             .map( |inner| inner.borrow_mut().process(ctx) );
     }
 
-    fn fd(&self) -> ::plat::net::RawFd {
+    fn fd(&self) -> llio::RawFd {
         self.fd
     }
 }
 
 impl EventHandler for TcpClient {
-    fn process(&mut self, ctx: &mut core::Context) {
+    fn process(&mut self, ctx: &mut ::Context) {
         self.inner.borrow_mut().process(ctx)
     }
 
-    fn fd(&self) -> ::plat::net::RawFd {
+    fn fd(&self) -> llio::RawFd {
         self.inner.borrow().fd()
     }
 }

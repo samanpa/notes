@@ -30,17 +30,17 @@ impl PartialOrd for TimerEntry {
 }
 impl Eq for TimerEntry {}
 
-pub struct SimpleTimer {
+pub struct HeapTimer {
     entries : BinaryHeap<TimerEntry>,
 }
 
-impl SimpleTimer{
+impl HeapTimer{
     pub fn new() -> Self {
-        SimpleTimer{ entries : BinaryHeap::new() }
+        HeapTimer{ entries : BinaryHeap::new() }
     }
 }
 
-impl Timer for SimpleTimer {
+impl Timer for HeapTimer {
     fn schedule(&mut self, ctx: &Context, cb: Box<TimerTask>, time: Time) {
         let entry = TimerEntry::new(time, cb);
         self.entries.push(entry);
@@ -56,7 +56,7 @@ impl Timer for SimpleTimer {
                         self.entries.push(entry);
                         break;
                     } else {
-                        entry.task.run(&ctx, time.clone())
+                        entry.task.run(ctx, time.clone())
                     }
                 }
             }

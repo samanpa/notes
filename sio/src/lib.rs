@@ -1,12 +1,12 @@
 pub mod time;
-pub mod simpletimer;
+pub mod heaptimer;
 pub mod error;
 pub mod reactor;
-pub mod event;
 pub mod net;
 
 pub use self::time::Time;
 extern crate libc as c;
+extern crate llio;
 
 #[allow(dead_code)]
 pub struct Context {

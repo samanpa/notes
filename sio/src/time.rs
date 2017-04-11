@@ -1,4 +1,5 @@
 use std::time::Duration;
+use std;
 
 #[repr(C)]
 #[derive(Eq)]
@@ -11,8 +12,6 @@ impl Clone for Time {
         Time::new(self.ns)
     }
 }
-
-use std;
 
 impl std::cmp::PartialEq for Time {
     fn eq(&self, other: &Time) -> bool {

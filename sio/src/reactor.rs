@@ -1,14 +1,18 @@
-use core::simpletimer;
-use core::Context;
-use core::error::{Error,Result};
-use core::event::EventHandler;
+use super::heaptimer;
+use super::Context;
+use super::error::{Error,Result};
 
 use std::boxed::Box;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use plat::net::{Events,EventType,RawFd,Token,Selector};
+use llio::{Events,EventType,RawFd,Token,Selector};
+
+pub trait EventHandler {
+    fn process(&mut self, ctx: &mut super::Context);
+    fn fd(&self) -> ::llio::RawFd;
+}
 
 pub struct Reactor {
     inner: Rc<RefCell<Inner>>
@@ -24,7 +28,7 @@ struct Event {
 }
 
 struct Inner {
-    timer : simpletimer::SimpleTimer,
+    timer : heaptimer::HeapTimer,
     run : bool,
     curr_token: u64,
     selector: Selector,
@@ -33,7 +37,7 @@ struct Inner {
 
 impl Inner {
     pub fn new() -> Result<Inner> {
-        let timer = simpletimer::SimpleTimer::new();
+        let timer = heaptimer::HeapTimer::new();
         let selector = try!(Selector::new());
         Ok(Inner{timer: timer
                  , run: false

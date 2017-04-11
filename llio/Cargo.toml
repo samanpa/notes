@@ -1,5 +1,5 @@
 [package]
-name = "notes"
+name = "llio"
 version = "0.1.0"
 authors = ["Kojo Adams <samanpa@gmail.com>"]
 
@@ -8,5 +8,4 @@ debug = true
 
 [dependencies]
 libc = "0.2"
-llio = { path = "../llio", version = "0.1.0" }
-sio = { path = "../sio", version = "0.1.0" }
+
