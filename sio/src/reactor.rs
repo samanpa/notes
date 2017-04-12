@@ -5,18 +5,18 @@ use super::error::{Error,Result};
 use std;
 use std::boxed::Box;
 use std::rc::{Rc,Weak};
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use ::EventHandler;
 
 use llio::{Events,EventType,RawFd,Token,Selector};
 
 pub struct Reactor {
-    inner: Rc<RefCell<Inner>>
+    inner: Rc<UnsafeCell<Inner>>
 }
 
 pub struct Handle{
-    inner: Weak<RefCell<Inner>>
+    inner: Weak<UnsafeCell<Inner>>
 }
 
 struct Event {
@@ -105,23 +105,27 @@ impl Inner {
 }
 
 impl Handle {
+    fn get<'a>(inner: Rc<UnsafeCell<Inner>>) -> &'a mut Inner {
+        unsafe{ &mut *inner.get() }
+    }
+
     pub fn new_token(&self) -> Result<Token> {
         match self.inner.upgrade() {
             None => Err(Error::from_str("Destroyed")),
-            Some(inner) => Ok(inner.borrow_mut().new_token())
+            Some(inner) => Ok(Handle::get(inner).new_token())
         }
     }
     
     pub fn register<H: 'static+EventHandler>(&self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         if let Some(inner) = self.inner.upgrade() {
-            return inner.borrow_mut().register(token, ty, handler);
+            return Handle::get(inner).register(token, ty, handler);
         };
         Err(Error::from_str("Destroyed"))
     }
 
     pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         if let Some(inner) = self.inner.upgrade() {
-            return inner.borrow_mut().modify(token, ty, handler);
+            return Handle::get(inner).modify(token, ty, handler);
         };
         Err(Error::from_str("Destroyed"))
     }
@@ -134,13 +138,17 @@ impl Clone for Handle {
 }
 
 impl Reactor {
+    fn get_inner<'a>(&self) -> &'a mut Inner {
+        unsafe{ &mut *self.inner.get() }
+    }
+
     pub fn new() -> std::io::Result<Reactor> {
         let inner = try!(Inner::new());
-        Ok(Reactor{inner: Rc::new(RefCell::new(inner))})
+        Ok(Reactor{inner: Rc::new(UnsafeCell::new(inner))})
     }
 
     pub fn stop(&mut self) {
-        self.inner.borrow_mut().stop();
+        self.get_inner().stop();
     }
 
 
@@ -149,15 +157,15 @@ impl Reactor {
     }
 
     pub fn run(&mut self, ctx: &mut Context) {
-        self.inner.borrow_mut().run(ctx, true);
+        self.get_inner().run(ctx, true);
     }
 
     pub fn register<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
-        self.inner.borrow_mut().register(token, ty, handler)
+        self.get_inner().register(token, ty, handler)
     }
 
 
     pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
-        self.inner.borrow_mut().modify(token, ty, handler)
+        self.get_inner().modify(token, ty, handler)
     }
 }

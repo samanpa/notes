@@ -1,7 +1,7 @@
 use std;
 use core::time::Time;
 use super::iter::*;
-use core::error::Error;
+use ::error::Error;
 
 pub type LogError = Error;
 pub type LogResult<T> = std::result::Result<T,LogError>;

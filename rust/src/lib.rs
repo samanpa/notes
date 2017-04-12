@@ -1,8 +1,9 @@
 extern crate sio;
 
-pub use self::sio as core;
+use self::sio as core;
 pub mod plat;
 pub mod logger;
+pub mod error;
 //pub mod notes;
 
 
