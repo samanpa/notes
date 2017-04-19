@@ -28,7 +28,7 @@ pub trait TimerTask {
 }
 
 pub trait Timer {
-    fn schedule(&mut self, ctx: &Context, cb: Box<TimerTask>, time: Time);
+    fn schedule(&mut self, cb: Box<TimerTask>, time: Time);
     fn process(&mut self, ctx: &Context, time: Time);
 }
 

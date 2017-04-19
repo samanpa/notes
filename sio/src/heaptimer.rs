@@ -41,7 +41,7 @@ impl HeapTimer{
 }
 
 impl Timer for HeapTimer {
-    fn schedule(&mut self, ctx: &Context, cb: Box<TimerTask>, time: Time) {
+    fn schedule(&mut self, cb: Box<TimerTask>, time: Time) {
         let entry = TimerEntry::new(time, cb);
         self.entries.push(entry);
     }
