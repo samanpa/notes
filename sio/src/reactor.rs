@@ -56,17 +56,26 @@ impl Inner {
         })
     }
 
+    
+    fn process(&mut self, ctx: &mut Context, token: Token) {
+        if let Entry::Occupied(mut entry) = self.events.entry(token) {
+            entry.get_mut()
+                .handler
+                .process(ctx)
+                .map_err( |err| {
+                    use std::error::Error;
+                    println!("Error on fd {} {}"
+                             , entry.get().fd, err.description());
+                    let _ = entry.remove();
+                });
+        }
+    }
+    
     fn poll(&mut self, ctx: &mut Context, live: bool) {
         let mut events = Events::with_capacity(2);
         let _ = self.selector.poll(&mut events, 1000_000_000);
         for event in &events {
-            let token = event.get_token();
-            if let Entry::Occupied(mut entry) = self.events.entry(token) {
-                let res = entry.get_mut()
-                    .handler
-                    .process(ctx);
-                res.map_err( |err| entry.remove() );
-            }
+            self.process(ctx, event.get_token());
         }
     }
     
@@ -96,7 +105,7 @@ impl Inner {
     
     pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventHandler> ) -> std::io::Result<()> {
         let fd = handler.fd();
-        self.selector.register(token, ty, fd);
+        try!(self.selector.register(token, ty, fd));
         self.events.insert(token, Event{fd: fd, handler: handler});
         Ok(())
     }
@@ -142,6 +151,15 @@ impl Handle {
         Err(Error::from_str("Destroyed"))
     }
 
+    pub fn unregister(&self, token: Token) -> std::io::Result<()> {
+        if let Some(actions) = self.actions.upgrade() {
+            let unreg = ScheduledAction::UnRegister(token);
+            actions.borrow_mut().push(unreg);
+            return Ok(())
+        };
+        Err(Error::from_str("Destroyed"))
+    }
+
     pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         if let Some(actions) = self.actions.upgrade() {
             let modify = ScheduledAction::Modify(token, ty, Box::new(handler));
@@ -167,7 +185,7 @@ impl Reactor {
                    , actions: Rc::new(RefCell::new(Vec::with_capacity(1)))})
     }
 
-    fn stop(&mut self) {
+    pub fn stop(&mut self) {
         self.run = false
     }
 
