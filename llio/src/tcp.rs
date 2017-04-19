@@ -42,7 +42,10 @@ impl TcpStream {
     pub fn has_sock_error(&self) -> Result<()> {
         let mut err : c::c_int = 0;
         try!(self.socket.get_sock_opt(c::SO_ERROR, &mut err));
-        super::to_void_result(err)
+        match err {
+            0 => Ok(()),
+            _ => Err(std::io::Error::from_raw_os_error(err))
+        }
     }
 }
 

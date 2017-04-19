@@ -64,7 +64,7 @@ impl Inner {
                 .process(ctx)
                 .map_err( |err| {
                     use std::error::Error;
-                    println!("Error on fd {} {}"
+                    println!("ERROR fd[{}]: {}"
                              , entry.get().fd, err.description());
                     let _ = entry.remove();
                 });
@@ -219,6 +219,7 @@ impl Reactor {
         }
     }
 
+    //FIXME: return error
     pub fn run(&mut self, ctx: &mut Context, live: bool) {
         self.run = true;
         while self.run {
