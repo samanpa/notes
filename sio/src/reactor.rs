@@ -8,7 +8,6 @@ use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::vec::Vec;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use ::EventHandler;
 
 use llio::{Events,EventType,RawFd,Token,Selector};
@@ -56,26 +55,26 @@ impl Inner {
         })
     }
 
-    
-    fn process(&mut self, ctx: &mut Context, token: Token) {
-        if let Entry::Occupied(mut entry) = self.events.entry(token) {
-            entry.get_mut()
-                .handler
-                .process(ctx)
-                .map_err( |err| {
-                    use std::error::Error;
-                    println!("ERROR fd[{}]: {}"
-                             , entry.get().fd, err.description());
-                    let _ = entry.remove();
-                });
-        }
+    fn process(&mut self, ctx: &mut Context, token: Token) -> std::result::Result<(), (std::io::Error,RawFd)> {
+        self.events.get_mut(&token)
+            .map( |event| {
+                return event.handler.process(ctx)
+                    .map_err( |err| (err, event.fd) )
+            });
+        Ok(())
     }
     
     fn poll(&mut self, ctx: &mut Context, live: bool) {
         let mut events = Events::with_capacity(2);
         let _ = self.selector.poll(&mut events, 1000_000_000);
         for event in &events {
-            self.process(ctx, event.get_token());
+            let token = event.get_token();
+            let _ = self.process(ctx, token)
+                .map_err(|(err, fd)|{
+                    use std::error::Error;
+                    println!("ERROR fd[{}]: {}", fd, err.description());
+                    let _ = self.unregister(token);
+                });
         }
     }
     
@@ -235,4 +234,9 @@ impl Reactor {
     pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         self.inner.borrow_mut().modify(token, ty, Box::new(handler))
     }
+
+    pub fn new_token(&self) -> Token {
+        self.inner.borrow_mut().new_token()
+    }
+    
 }

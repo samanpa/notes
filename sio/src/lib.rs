@@ -2,9 +2,12 @@ pub mod time;
 pub mod heaptimer;
 pub mod error;
 pub mod reactor;
+pub mod service;
 pub mod net;
 
 pub use self::time::Time;
+pub use service::{Service,ServiceFactory};
+
 extern crate libc as c;
 extern crate llio;
 

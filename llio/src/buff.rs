@@ -48,7 +48,7 @@ impl Buff {
     }
 
     pub fn advance_write(&mut self, nbytes: usize) {
-        self.limit = self.limit + nbytes;
+        self.limit += nbytes;
     }
 
     pub fn advance_read(&mut self, nbytes: usize) {
@@ -76,7 +76,7 @@ impl Buff {
     pub unsafe fn unchecked_write(&mut self, data: &[u8]) {
         let dest = self.data.as_mut_ptr().offset(self.limit as isize);
         ptr::copy_nonoverlapping(data.as_ptr(), dest, data.len());
-        self.limit += data.len();
+        self.advance_write(data.len());
     }
     
     

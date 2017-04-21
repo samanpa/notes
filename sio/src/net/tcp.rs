@@ -1,88 +1,57 @@
-extern crate libc as c;
 extern crate llio;
 
-use std;
-use llio::{EventType,TcpStream,Token};
-use ::error::Result;
-use ::EventHandler;
-use std::rc::{Rc,Weak};
-use std::cell::RefCell;
+use llio::{Buff,EventType,Token};
+use ::reactor::Handle;
+use ::{Context,EventHandler,Service,ServiceFactory};
+use std::net::SocketAddrV4;
+use std::io::{Result};
+use std::marker::PhantomData;
 
-pub enum TcpState {
-    Connected,
-    Connecting,
-    Disconnected,
-    NotInitialized,
-    Closed
+//FIXME: should we have a transport trait
+
+pub struct Connect<NS: ServiceFactory<S>, S: Service + 'static> {
+    stream:  Option<llio::TcpStream>,
+    token:   Token,
+    handle:  Handle,
+    factory: NS,
+    fd:      llio::RawFd,
+    _phantom: PhantomData<S>
 }
 
-pub struct TcpClient {
-    inner: Rc<RefCell<Inner>>
-}
-
-pub struct TcpHandle {
-    inner: Weak<RefCell<Inner>>,
-    fd: llio::RawFd
-}
-
-pub enum TcpConnectingState {
-    Connected,
-    Connecting,
-    Error
-}
-
-struct TcpConnectingStream {
+pub struct TcpClient<S> where S: Service{
     token: Token,
-    stream: TcpStream,
-    reactor: ::reactor::Handle,
-    state: TcpConnectingState
+    handle: Handle,
+    buff: Buff,
+    service: S,
+    fd:      llio::RawFd,
 }
 
-struct Inner {
-    token: Token,
-    stream: TcpStream,
-    reactor: ::reactor::Handle,
-    state: TcpState,
+impl <NS,S> Connect<NS,S>
+    where NS: ServiceFactory<S> + 'static
+    , S: Service 
+{
+    pub fn get_token(&self) -> Token {
+        self.token.clone()
+    }
 }
 
-
-impl TcpClient {
-    //return an Rc seems wrong
-    pub fn connect(addr: &std::net::SocketAddrV4, reactor: ::reactor::Handle ) -> Result<Self> {
-        let stream = try!(TcpStream::new());
-        try!(stream.nonblock());
-        try!(stream.connect(addr));
-        let token = try!(reactor.new_token());
+impl <NS,S> EventHandler for Connect<NS,S>
+    where NS: ServiceFactory<S> + 'static
+    , S: Service 
+{
+    fn process(&mut self, _: &mut Context) -> Result<()> {
+        let stream = self.stream.take().unwrap();
         let fd = stream.fd();
-        let inner  = Inner { token: token,
-                             stream: stream,
-                             reactor: reactor.clone(),
-                             state: TcpState::Connecting };
-        let inner  = Rc::new(RefCell::new(inner));
-        let handle = TcpHandle{ inner: Rc::downgrade(&inner), fd: fd };
-        //try!(reactor.register(token, EventType::Write, Box::new(handle)));
-        let client = TcpClient{ inner: inner };
-        Ok(client)
-    }
-}
-
-impl EventHandler for Inner
-{
-    fn process(&mut self, ctx: &mut ::Context) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    fn fd(&self) -> llio::RawFd {
-        self.stream.fd()
-    }
-
-}
-
-impl EventHandler for TcpHandle
-{
-    fn process(&mut self, ctx: &mut ::Context) -> std::io::Result<()> {
-        self.inner.upgrade()
-            .map( |inner| inner.borrow_mut().process(ctx) );
+        try!(stream.has_sock_error());
+        let mut client = TcpClient {
+            token: self.token.clone(),
+            handle: self.handle.clone(),
+            buff: Buff::with_capacity(64),
+            service: try!(self.factory.create(stream)),
+            fd: fd
+        };
+        client.service.on_connect();
+        try!(self.handle.modify(self.token, EventType::Read, client));
         Ok(())
     }
 
@@ -91,14 +60,50 @@ impl EventHandler for TcpHandle
     }
 }
 
-impl EventHandler for TcpClient {
-    fn process(&mut self, ctx: &mut ::Context) -> std::io::Result<()> {
-        self.inner.borrow_mut().process(ctx);
+impl <S> TcpClient<S> where S: Service {
+    pub fn connect<NS>(addr: SocketAddrV4, handle: Handle, factory: NS) -> Result<Connect<NS,S>>
+        where NS: ServiceFactory<S>  {
+        let stream = try!(llio::TcpStream::new());
+        let _      = try!(stream.nonblock());
+        let _      = try!(stream.connect(&addr));
+        let token  = try!(handle.new_token());
+        let fd     = stream.fd();
+        let connect = Connect {
+            stream: Some(stream),
+            token:  token,
+            handle: handle,
+            fd: fd,
+            factory: factory,
+            _phantom: PhantomData
+        };
+        Ok(connect)
+    }
+}
+
+
+impl <S> EventHandler for TcpClient<S>
+    where S: Service
+{
+    fn process(&mut self, _: &mut Context) -> Result<()> {
+        use std::io::Read;
+
+        let nread = {
+            let mut transport = self.service.get_transport();
+            let nread = try!(transport.read(self.buff.as_mut_slice()));
+            self.buff.advance_write(nread);
+            nread
+        };
+        if nread == 0 {
+            self.service.on_disconnect();
+            try!(self.handle.unregister(self.token.clone()));
+            return Ok(());
+        }
+        let len = try!(self.service.process(self.buff.as_slice()));
+        self.buff.advance_read(len);
         Ok(())
     }
 
     fn fd(&self) -> llio::RawFd {
-        self.inner.borrow().fd()
+        self.fd
     }
 }
-
