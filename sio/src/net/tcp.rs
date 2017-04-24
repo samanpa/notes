@@ -89,9 +89,9 @@ impl <F,S> EventSource for Chain<F,S>
     where F: 'static + Fn(llio::TcpStream) -> S
     , S: 'static + Service {
     fn process(&mut self, ctx:&mut Context) -> Result<()> {
-        let service = (self.factory)(stream);
         //Fixme: Notify service if we failed to connect
         let stream = try!(self.connect.process(ctx));
+        let service = (self.factory)(stream);
         //FIXME: handle EWOULDBLOCK
         let mut handle = self.connect.handle.clone();
         let mut client = TcpClient {

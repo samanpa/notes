@@ -63,6 +63,15 @@ impl<'a> IntoIterator for &'a Events {
     }
 }
 
+impl<'a> IntoIterator for &'a mut Events {
+    type Item = Event;
+    type IntoIter = EventIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        EventIterator{ itr: (&self.events).into_iter()}
+    }
+}
+
 fn from_event_type(ty: EventType) -> u32
 {
     let res = match ty {
