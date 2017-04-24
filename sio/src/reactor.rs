@@ -41,7 +41,7 @@ struct Inner {
     timer : heaptimer::HeapTimer,
     curr_token: u64,
     selector: Selector,
-    events : HashMap<Token, Event>,
+    events: HashMap<Token, Event>,
 }
 
 impl Inner {
@@ -63,11 +63,11 @@ impl Inner {
         Ok(())
     }
     
-    fn poll(&mut self, ctx: &mut Context, events: &mut Events, live: bool) {
-        let _ = self.selector.poll(events, 1000_000_000);
+    fn poll(&mut self, ctx: &mut Context, events: &mut Events, _live: bool, timeout: u64) {
+        let _ = self.selector.poll(events, timeout);
         for event in events {
             let token = event.get_token();
-            self.process(ctx, token)
+            let _ = self.process(ctx, token)
                 .map_err(|(err, fd)|{
                     use std::error::Error;
                     println!("ERROR fd[{}]: {}", fd, err.description());
@@ -165,6 +165,16 @@ impl Handle {
         };
         Err(Error::from_str("Destroyed"))
     }
+
+    pub fn schedule<T: 'static+TimerTask>(&self, time: Time, task: T) -> std::io::Result<()> {
+        if let Some(actions) = self.actions.upgrade() {
+            let timer = ScheduledAction::Timer(time, Box::new(task));
+            actions.borrow_mut().push(timer);
+            return Ok(())
+        };
+        Err(Error::from_str("Destroyed"))
+    }
+
 }
 
 impl Clone for Handle {
@@ -187,16 +197,18 @@ impl Reactor {
     }
 
 
-    fn run_once(&mut self, ctx: &mut Context, events: &mut Events, live: bool) {
+    fn run_once(&mut self, ctx: &mut Context, events: &mut Events, live: bool) -> bool {
         let mut inner = self.inner.borrow_mut();
+        let mut timeout = 1_000_000_000;
         { 
-            let mut actions = self.actions
-                .borrow_mut();
+            let mut actions = self.actions.borrow_mut();
             for action in actions.drain(..) {
                 inner.run_action(action);
+                timeout = 1_000_000; //
             };
         };
-        inner.poll(ctx, events, live);
+        inner.poll(ctx, events, live, timeout);
+        self.actions.borrow().len() + inner.events.len() > 0
     }
 
     //FIXME: return error
@@ -204,7 +216,9 @@ impl Reactor {
         self.run = true;
         let mut events = Events::with_capacity(2);
         while self.run {
-            self.run_once(ctx, &mut events, live);
+            if self.run_once(ctx, &mut events, live) == false {
+                break;
+            }
         }
     }
 

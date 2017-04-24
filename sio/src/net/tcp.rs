@@ -53,10 +53,6 @@ impl TcpStream {
 }
 
 impl Connect {
-    pub fn get_token(&self) -> Token {
-        self.token.clone()
-    }
-
     fn process(&mut self, _: &mut Context) -> Result<llio::TcpStream> {
         if let Some(ref stream) = self.stream {
             //FIXME: Handle EWOULDBLOCK
