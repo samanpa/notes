@@ -2,67 +2,41 @@ extern crate llio;
 
 use llio::{Buff,EventType,Token};
 use ::reactor::Handle;
-use ::{Context,EventHandler,Service,ServiceFactory};
+use ::{Context,EventSource,Service};
 use std::net::SocketAddrV4;
 use std::io::{Result};
 use std::marker::PhantomData;
 
 //FIXME: should we have a transport trait
+pub struct TcpStream {
+    //We should probably have an llio::TcpStream in here
+}
 
-pub struct Connect<NS: ServiceFactory<S>, S: Service + 'static> {
+pub struct Connect {
     stream:  Option<llio::TcpStream>,
     token:   Token,
     handle:  Handle,
-    factory: NS,
+    fd:      llio::RawFd
+}
+
+pub struct TcpClient<S> {
+    token:   Token,
+    handle:  Handle,
+    buff:    Buff,
     fd:      llio::RawFd,
-    _phantom: PhantomData<S>
+    service: S
 }
 
-pub struct TcpClient<S> where S: Service{
-    token: Token,
-    handle: Handle,
-    buff: Buff,
-    service: S,
+pub struct Chain<F,S> {
+    connect: Connect,
+    factory: F,
     fd:      llio::RawFd,
+    _service: PhantomData<S>
 }
 
-impl <NS,S> Connect<NS,S>
-    where NS: ServiceFactory<S> + 'static
-    , S: Service 
-{
-    pub fn get_token(&self) -> Token {
-        self.token.clone()
-    }
-}
 
-impl <NS,S> EventHandler for Connect<NS,S>
-    where NS: ServiceFactory<S> + 'static
-    , S: Service 
-{
-    fn process(&mut self, _: &mut Context) -> Result<()> {
-        let stream = self.stream.take().unwrap();
-        let fd = stream.fd();
-        try!(stream.has_sock_error());
-        let mut client = TcpClient {
-            token: self.token.clone(),
-            handle: self.handle.clone(),
-            buff: Buff::with_capacity(64),
-            service: try!(self.factory.create(stream)),
-            fd: fd
-        };
-        client.service.on_connect();
-        try!(self.handle.modify(self.token, EventType::Read, client));
-        Ok(())
-    }
-
-    fn fd(&self) -> llio::RawFd {
-        self.fd
-    }
-}
-
-impl <S> TcpClient<S> where S: Service {
-    pub fn connect<NS>(addr: SocketAddrV4, handle: Handle, factory: NS) -> Result<Connect<NS,S>>
-        where NS: ServiceFactory<S>  {
+impl TcpStream {
+    pub fn connect(addr: SocketAddrV4, handle: Handle) -> Result<Connect> {
         let stream = try!(llio::TcpStream::new());
         let _      = try!(stream.nonblock());
         let _      = try!(stream.connect(&addr));
@@ -72,16 +46,73 @@ impl <S> TcpClient<S> where S: Service {
             stream: Some(stream),
             token:  token,
             handle: handle,
-            fd: fd,
-            factory: factory,
-            _phantom: PhantomData
+            fd: fd
         };
         Ok(connect)
     }
 }
 
+impl Connect {
+    pub fn get_token(&self) -> Token {
+        self.token.clone()
+    }
 
-impl <S> EventHandler for TcpClient<S>
+    fn process(&mut self, _: &mut Context) -> Result<llio::TcpStream> {
+        if let Some(ref stream) = self.stream {
+            //FIXME: Handle EWOULDBLOCK
+            try!(stream.has_sock_error())
+        };
+        Ok(self.stream.take().unwrap())
+    }
+
+    pub fn with_service<F,S>(self, factory: F) -> Result<()>
+        where F: 'static + Fn(llio::TcpStream) -> S
+        ,     S: 'static + Service
+    {
+        let handle = self.handle.clone();
+        let token = self.token.clone();
+        let fd = self.fd;
+        //Fixme: Should we really be storing the fd in the chain.
+        //  what if the fd has been closed for some reason.
+        let chain = Chain{ connect: self
+                           , factory: factory
+                           , fd: fd
+                           , _service: PhantomData
+        };
+        handle.register(token, EventType::Write, chain)?;
+        Ok(())
+    }
+}
+
+
+impl <F,S> EventSource for Chain<F,S>
+    where F: 'static + Fn(llio::TcpStream) -> S
+    , S: 'static + Service {
+    fn process(&mut self, ctx:&mut Context) -> Result<()> {
+        let service = (self.factory)(stream);
+        //Fixme: Notify service if we failed to connect
+        let stream = try!(self.connect.process(ctx));
+        //FIXME: handle EWOULDBLOCK
+        let mut handle = self.connect.handle.clone();
+        let mut client = TcpClient {
+            token:   self.connect.token.clone(),
+            handle:  self.connect.handle.clone(),
+            buff:    Buff::with_capacity(64),
+            service: service,
+            fd:      self.fd
+        };
+        try!(client.service.on_connect());
+        try!(handle.modify(client.token, EventType::Read, client));
+        Ok(())
+    }
+
+    fn fd(&self) -> llio::RawFd {
+        self.fd
+    }
+}
+
+
+impl <S> EventSource for TcpClient<S>
     where S: Service
 {
     fn process(&mut self, _: &mut Context) -> Result<()> {

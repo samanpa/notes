@@ -1,4 +1,4 @@
-pub mod tcp;
+mod tcp;
 
-pub use self::tcp::TcpClient as TcpClient;
+pub use self::tcp::{TcpStream,TcpClient};
 

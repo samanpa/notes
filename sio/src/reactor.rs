@@ -8,15 +8,15 @@ use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::vec::Vec;
 use std::collections::HashMap;
-use ::EventHandler;
+use ::EventSource;
 
 use llio::{Events,EventType,RawFd,Token,Selector};
 use super::{Time,TimerTask};
 
 
 enum ScheduledAction {
-    Register(Token, EventType, Box<EventHandler>),
-    Modify(Token, EventType, Box<EventHandler>),
+    Register(Token, EventType, Box<EventSource>),
+    Modify(Token, EventType, Box<EventSource>),
     UnRegister(Token),
     Timer(Time, Box<TimerTask>)
 }
@@ -34,7 +34,7 @@ pub struct Handle {
 
 struct Event {
     fd: RawFd,
-    handler: Box<EventHandler>
+    handler: Box<EventSource>
 }
 
 struct Inner {
@@ -56,11 +56,10 @@ impl Inner {
     }
 
     fn process(&mut self, ctx: &mut Context, token: Token) -> std::result::Result<(), (std::io::Error,RawFd)> {
-        self.events.get_mut(&token)
-            .map( |event| {
-                return event.handler.process(ctx)
-                    .map_err( |err| (err, event.fd) )
-            });
+        if let Some(ref mut event) = self.events.get_mut(&token) {
+            return event.handler.process(ctx)
+                .map_err( |err| (err, event.fd) );
+        }
         Ok(())
     }
     
@@ -69,7 +68,7 @@ impl Inner {
         let _ = self.selector.poll(&mut events, 1000_000_000);
         for event in &events {
             let token = event.get_token();
-            let _ = self.process(ctx, token)
+            self.process(ctx, token)
                 .map_err(|(err, fd)|{
                     use std::error::Error;
                     println!("ERROR fd[{}]: {}", fd, err.description());
@@ -102,14 +101,14 @@ impl Inner {
         Token::new(self.curr_token - 1)
     }
     
-    pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventHandler> ) -> std::io::Result<()> {
+    pub fn register(&mut self, token: Token, ty: EventType, handler: Box<EventSource> ) -> std::io::Result<()> {
         let fd = handler.fd();
         try!(self.selector.register(token, ty, fd));
         self.events.insert(token, Event{fd: fd, handler: handler});
         Ok(())
     }
 
-    pub fn modify(&mut self, token: Token, ty: EventType, handler: Box<EventHandler> ) -> std::io::Result<()> {
+    pub fn modify(&mut self, token: Token, ty: EventType, handler: Box<EventSource> ) -> std::io::Result<()> {
         let fd = handler.fd();
         match self.events.get_mut(&token) {
             None => return Err(Error::from_str("Invalid token")),
@@ -141,7 +140,7 @@ impl Handle {
         }
     }
     
-    pub fn register<H: 'static+EventHandler>(&self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
+    pub fn register<H: 'static+EventSource>(&self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         if let Some(actions) = self.actions.upgrade() {
             let reg = ScheduledAction::Register(token, ty, Box::new(handler));
             actions.borrow_mut().push(reg);
@@ -159,7 +158,7 @@ impl Handle {
         Err(Error::from_str("Destroyed"))
     }
 
-    pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
+    pub fn modify<H: 'static+EventSource>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         if let Some(actions) = self.actions.upgrade() {
             let modify = ScheduledAction::Modify(token, ty, Box::new(handler));
             actions.borrow_mut().push(modify);
@@ -226,12 +225,12 @@ impl Reactor {
         }
     }
 
-    pub fn register<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
+    pub fn register<H: 'static+EventSource>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         self.inner.borrow_mut().register(token, ty, Box::new(handler))
     }
 
 
-    pub fn modify<H: 'static+EventHandler>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
+    pub fn modify<H: 'static+EventSource>(&mut self, token: Token, ty: EventType, handler: H) -> std::io::Result<()> {
         self.inner.borrow_mut().modify(token, ty, Box::new(handler))
     }
 

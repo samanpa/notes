@@ -6,7 +6,7 @@ pub mod service;
 pub mod net;
 
 pub use self::time::Time;
-pub use service::{Service,ServiceFactory};
+pub use service::Service;
 
 extern crate libc as c;
 extern crate llio;
@@ -65,7 +65,8 @@ impl<T> Async<T> {
     }
 } 
 
-pub trait EventHandler {
+
+pub trait EventSource {
     fn process(&mut self, ctx: &mut Context) -> std::io::Result<()>;
     fn fd(&self) -> llio::RawFd;
 }
