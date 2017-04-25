@@ -120,7 +120,7 @@ impl Inner {
     }
 
     pub fn unregister(&mut self, token: Token) -> Result<()> {
-        let res = self.events.remove(&token).map( |Event{fd,source}| {
+        let res = self.events.remove(&token).map( |Event{fd,..}| {
             self.selector.unregister(fd )
         });
         match res {
@@ -203,8 +203,8 @@ impl Reactor {
         { 
             let mut actions = self.actions.borrow_mut();
             for action in actions.drain(..) {
-                inner.run_action(action);
-                timeout = 1_000_000; //
+                let _ = inner.run_action(action);
+                timeout = 1_000_000;
             };
         };
         inner.poll(ctx, events, live, timeout);
