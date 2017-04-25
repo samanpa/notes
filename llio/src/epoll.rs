@@ -98,7 +98,7 @@ impl Selector {
                                          , max_events
                                          , (timeout_ns / 1000_000) as c::c_int)
         };
-        if res > 0 {
+        if res >= 0 {
             unsafe{ events.events.set_len(res as usize) };
         }
         super::to_void_result(res)
