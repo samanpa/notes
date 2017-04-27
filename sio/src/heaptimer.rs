@@ -41,17 +41,22 @@ impl HeapTimer{
 }
 
 impl Timer for HeapTimer {
-    fn schedule(&mut self, cb: Box<TimerTask>, time: Time) {
-        let entry = TimerEntry::new(time, cb);
+    fn schedule(&mut self, task: Box<TimerTask>, time: Time) {
+        let entry = TimerEntry::new(time, task);
         self.entries.push(entry);
+    }
+
+    fn peek_time(&self) -> Option<Time> {
+        self.entries.peek()
+            .map( |ref entry| entry.time )
     }
 
     fn process(&mut self, ctx: &Context, time: Time) {
         loop {
-            let entry = self.entries.pop();
+            let mut entry = self.entries.pop();
             match entry {
                 None => break,
-                Some(entry) => {
+                Some(mut entry) => {
                     if entry.time > time.clone() {
                         self.entries.push(entry);
                         break;

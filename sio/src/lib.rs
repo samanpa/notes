@@ -1,5 +1,6 @@
 pub mod time;
 pub mod heaptimer;
+pub mod simpletimer;
 pub mod error;
 pub mod reactor;
 pub mod service;
@@ -27,12 +28,13 @@ impl Context {
 }
 
 pub trait TimerTask {
-    fn run(&self, ctx: &Context, time: Time);
+    fn run(&mut self, ctx: &Context, time: Time);
 }
 
 pub trait Timer {
-    fn schedule(&mut self, cb: Box<TimerTask>, time: Time);
+    fn schedule(&mut self, task: Box<TimerTask>, time: Time);
     fn process(&mut self, ctx: &Context, time: Time);
+    fn peek_time(&self) -> Option<Time>;
 }
 
 pub enum Async<T> {

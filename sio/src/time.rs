@@ -13,6 +13,8 @@ impl Clone for Time {
     }
 }
 
+impl Copy for Time {}
+
 impl std::cmp::PartialEq for Time {
     fn eq(&self, other: &Time) -> bool {
         self.ns == other.ns

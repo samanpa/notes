@@ -7,6 +7,18 @@ use std::net::SocketAddrV4;
 use std::io::{Result,Read,Write};
 use std::marker::PhantomData;
 
+pub struct TcpListener {
+    inner: llio::TcpListener,
+}
+
+impl TcpListener {
+    pub fn new(addr: SocketAddrV4) -> Result<Self> {
+        let listener = try!(llio::TcpListener::new(addr));
+        Ok(TcpListener{inner: listener})
+    }
+}
+
+
 //FIXME: should we have a transport trait
 pub struct TcpStream {
     stream:  llio::TcpStream,
